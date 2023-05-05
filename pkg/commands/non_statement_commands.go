@@ -3,6 +3,8 @@ package commands
 import (
 	"fmt"
 	"os"
+
+	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
 
 type NonStatementCommandType int8
@@ -17,7 +19,7 @@ type NonStatementExit struct {
 	nonStatementType NonStatementCommandType
 }
 
-func (ns *NonStatementExit) Execute() CommandExecutionStatusCode {
+func (ns *NonStatementExit) Execute(t *table.Table) CommandExecutionStatusCode {
 	ns.code = SUCCESS
 	os.Exit(0)
 	return ns.code
@@ -41,7 +43,7 @@ type NonStatementUnrecognized struct {
 	nonStatementType NonStatementCommandType
 }
 
-func (ns *NonStatementUnrecognized) Execute() CommandExecutionStatusCode {
+func (ns *NonStatementUnrecognized) Execute(t *table.Table) CommandExecutionStatusCode {
 	ns.code = UNRECOGNIZED
 	return ns.code
 }

@@ -1,8 +1,13 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/petarTrifunovic98/my-simple-db/pkg/row"
+	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
 
 type StatementCommandType int8
@@ -18,8 +23,20 @@ type StatementSelect struct {
 	statementType StatementCommandType
 }
 
-func (s *StatementSelect) Execute() CommandExecutionStatusCode {
+func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 	s.code = SUCCESS
+
+	values := t.Select()
+	if len(values) <= 0 {
+		return s.code
+	}
+
+	for _, v := range values {
+		r := &row.Row{}
+		json.Unmarshal(v, r)
+		r.Print()
+	}
+
 	return s.code
 }
 
@@ -41,10 +58,26 @@ type StatementInsert struct {
 	args          []string
 }
 
-func (s *StatementInsert) Execute() CommandExecutionStatusCode {
+func (s *StatementInsert) Execute(t *table.Table) CommandExecutionStatusCode {
 	if len(s.args) != 3 {
 		s.code = FAILURE
 	} else {
+		newRow := &row.Row{}
+		id, err := strconv.Atoi(s.args[0])
+		if err != nil {
+			s.code = FAILURE
+			return s.code
+		}
+
+		newRow.Id = uint32(id)
+		copy(newRow.Username[:], []byte(s.args[1]))
+		copy(newRow.Email[:], []byte(s.args[2]))
+
+		bytes, _ := json.Marshal(newRow)
+
+		t.Insert(newRow.Id, bytes)
+		// serialization.Serialize(&newRow, &(t.Pages[0].SerializedRows))
+
 		s.code = SUCCESS
 	}
 
@@ -71,7 +104,7 @@ type StatementUnrecognized struct {
 	statementType StatementCommandType
 }
 
-func (s *StatementUnrecognized) Execute() CommandExecutionStatusCode {
+func (s *StatementUnrecognized) Execute(t *table.Table) CommandExecutionStatusCode {
 	s.code = UNRECOGNIZED
 	return s.code
 }

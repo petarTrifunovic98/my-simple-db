@@ -7,17 +7,14 @@ import (
 	"strings"
 
 	"github.com/petarTrifunovic98/my-simple-db/pkg/commands"
+	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
-
-type Row struct {
-	id       uint32
-	username string
-	email    string
-}
 
 const prompt string = "my-db> "
 
 func main() {
+	t := table.NewTable()
+	defer t.DestroyTable()
 	fmt.Println("~ Started my db... ")
 
 	for {
@@ -34,11 +31,11 @@ func main() {
 		if inputType == commands.NON_STATEMENT_COMMAND {
 			nonStatement := getNonStatementCommand(input)
 			nonStatement.PrintPreExecution()
-			nonStatement.Execute()
+			nonStatement.Execute(t)
 		} else {
 			statement := getStatementCommand(input)
 			statement.PrintPreExecution()
-			switch statement.Execute() {
+			switch statement.Execute(t) {
 			case commands.SUCCESS:
 				fmt.Println("Success")
 			case commands.FAILURE:

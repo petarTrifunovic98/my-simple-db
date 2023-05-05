@@ -1,5 +1,9 @@
 package commands
 
+import (
+	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
+)
+
 type CommandType int8
 
 const (
@@ -16,6 +20,6 @@ const (
 )
 
 type Command interface {
-	Execute() CommandExecutionStatusCode
+	Execute(t *table.Table) CommandExecutionStatusCode
 	PrintPreExecution()
 }
