@@ -62,25 +62,7 @@ func (p *Pager) ReadNextValue() []byte {
 	return b
 }
 
-func (p *Pager) ReadWholeCurrentPage() [][]byte {
-	values := make([][]byte, 0)
-
-	p.File.Sync()
-	p.File.Seek(0, 0)
-
-	fmt.Println(p.SizesWritten)
-
-	for _, size := range p.SizesWritten {
-		b := make([]byte, size)
-		p.File.Read(b)
-		fmt.Println(len(b))
-		values = append(values, b)
-	}
-
-	return values
-}
-
-func (p *Pager) ReadWholeCurrentPage2() []byte {
+func (p *Pager) ReadWholeCurrentPage() []byte {
 	p.File.Sync()
 	p.File.Seek(0, 0)
 

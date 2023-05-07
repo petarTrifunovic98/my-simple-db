@@ -27,7 +27,7 @@ type StatementSelect struct {
 func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 	s.code = SUCCESS
 
-	values := t.Select2()
+	values := t.Select()
 	if len(values) <= 0 {
 		return s.code
 	}

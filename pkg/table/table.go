@@ -28,13 +28,8 @@ func (t *Table) Insert(key any, data any) {
 	t.Pager.AddToCurrentPage(data)
 }
 
-func (t *Table) Select() [][]byte {
+func (t *Table) Select() []byte {
 	values := t.Pager.ReadWholeCurrentPage()
-	return values
-}
-
-func (t *Table) Select2() []byte {
-	values := t.Pager.ReadWholeCurrentPage2()
 	return values
 }
 
