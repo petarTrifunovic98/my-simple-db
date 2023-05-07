@@ -1,20 +1,20 @@
 package serialization
 
 import (
-	"encoding/json"
-	"io"
+	"bytes"
+	"encoding/gob"
 )
 
-func Serialize(source any, destination io.Writer) {
-	encoder := json.NewEncoder(destination)
+func Serialize(source any) []byte {
+	var b bytes.Buffer
+
+	encoder := gob.NewEncoder(&b)
 	encoder.Encode(source)
-	// encoder := gob.NewEncoder(destination)
-	// encoder.Encode(source)
+
+	return b.Bytes()
 }
 
-func Deserialize(source io.Reader, destination any) error {
-	decoder := json.NewDecoder(source)
+func Deserialize(source *bytes.Buffer, destination any) error {
+	decoder := gob.NewDecoder(source)
 	return decoder.Decode(destination)
-	// decoder := gob.NewDecoder(source)
-	// return decoder.Decode(destination)
 }

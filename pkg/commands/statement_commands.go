@@ -1,12 +1,13 @@
 package commands
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/petarTrifunovic98/my-simple-db/pkg/row"
+	"github.com/petarTrifunovic98/my-simple-db/pkg/serialization"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
 
@@ -26,18 +27,21 @@ type StatementSelect struct {
 func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 	s.code = SUCCESS
 
-	values := t.Select()
+	values := t.Select2()
 	if len(values) <= 0 {
 		return s.code
 	}
 
-	for _, v := range values {
+	b := bytes.NewBuffer(values)
+
+	for {
 		r := &row.Row{}
-		json.Unmarshal(v, r)
+		err := serialization.Deserialize(b, r)
+		if err != nil {
+			return s.code
+		}
 		r.Print()
 	}
-
-	return s.code
 }
 
 func (s *StatementSelect) PrintPreExecution() {
@@ -73,10 +77,9 @@ func (s *StatementInsert) Execute(t *table.Table) CommandExecutionStatusCode {
 		copy(newRow.Username[:], []byte(s.args[1]))
 		copy(newRow.Email[:], []byte(s.args[2]))
 
-		bytes, _ := json.Marshal(newRow)
+		rowBytes := serialization.Serialize(newRow)
 
-		t.Insert(newRow.Id, bytes)
-		// serialization.Serialize(&newRow, &(t.Pages[0].SerializedRows))
+		t.Insert(newRow.Id, rowBytes)
 
 		s.code = SUCCESS
 	}

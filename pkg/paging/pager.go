@@ -46,8 +46,7 @@ func NewPager(filename string) *Pager {
 }
 
 func (p *Pager) AddToCurrentPage(data any) {
-	// p.File.Seek(0, 2)
-	// serialization.Serialize(&data, p.File)
+	// p.File.Seek(0, 2) -- Works without this line. Maybe Write always writes to the end of the file?
 	num, _ := p.File.Write(data.([]byte))
 	p.SizesWritten = append(p.SizesWritten, uint32(num))
 }
@@ -77,6 +76,20 @@ func (p *Pager) ReadWholeCurrentPage() [][]byte {
 		fmt.Println(len(b))
 		values = append(values, b)
 	}
+
+	return values
+}
+
+func (p *Pager) ReadWholeCurrentPage2() []byte {
+	p.File.Sync()
+	p.File.Seek(0, 0)
+
+	stat, _ := p.File.Stat()
+	s := stat.Size()
+
+	values := make([]byte, s)
+
+	p.File.Read(values)
 
 	return values
 }
