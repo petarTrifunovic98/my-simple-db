@@ -32,15 +32,33 @@ func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 		return s.code
 	}
 
-	b := bytes.NewBuffer(values)
-
+	i := 0
 	for {
-		r := &row.Row{}
-		err := serialization.Deserialize(b, r)
-		if err != nil {
+		startIndex := i * 4096
+		if startIndex >= len(values) {
 			return s.code
 		}
-		r.Print()
+
+		endIndex := (i + 1) * 4096
+
+		var b *bytes.Buffer
+
+		if endIndex >= len(values) {
+			b = bytes.NewBuffer(values[startIndex:])
+		} else {
+			b = bytes.NewBuffer(values[startIndex:endIndex])
+		}
+
+		for {
+			r := &row.Row{}
+			err := serialization.Deserialize(b, r)
+			if err != nil {
+				break
+			}
+			r.Print()
+		}
+
+		i++
 	}
 }
 

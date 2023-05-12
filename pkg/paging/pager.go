@@ -2,22 +2,18 @@ package paging
 
 import (
 	"fmt"
-	"io"
 	"os"
 )
 
 const MAX_PAGES_PER_TABLE uint32 = 100
 
-type Page struct {
-	SerializedRows io.ReadWriter
-}
-
 type Pager struct {
 	Pages             []*Page
-	CurrentPage       uint32
 	File              *os.File
 	SizesWritten      []uint32
+	CurrentPageIndex  int32
 	CurrentValueIndex uint32
+	NumPages          uint32
 }
 
 func NewPager(filename string) *Pager {
@@ -29,26 +25,48 @@ func NewPager(filename string) *Pager {
 		return nil
 	}
 
+	stat, _ := file.Stat()
+	size := stat.Size()
+
+	numPages := size / PAGESIZE
+	if size%PAGESIZE != 0 {
+		numPages++
+	}
+	fmt.Println("Num pages:", numPages)
+
 	pager := &Pager{
-		Pages:             make([]*Page, 0, MAX_PAGES_PER_TABLE),
+		Pages:             make([]*Page, numPages, MAX_PAGES_PER_TABLE),
+		CurrentPageIndex:  int32(numPages) - 1,
 		File:              file,
 		SizesWritten:      make([]uint32, 0),
 		CurrentValueIndex: 0,
+		NumPages:          uint32(numPages),
 	}
-
-	pager.Pages = append(pager.Pages, &Page{
-		// SerializedRows: &bytes.Buffer{},
-		SerializedRows: file,
-	})
-	pager.CurrentPage = 0
 
 	return pager
 }
 
-func (p *Pager) AddToCurrentPage(data any) {
-	// p.File.Seek(0, 2) -- Works without this line. Maybe Write always writes to the end of the file?
-	num, _ := p.File.Write(data.([]byte))
-	p.SizesWritten = append(p.SizesWritten, uint32(num))
+func (p *Pager) AddToCurrentPage(data []byte) {
+	if p.NumPages == 0 {
+		p.NumPages = 1
+		p.CurrentPageIndex = 0
+		p.Pages = append(p.Pages, NewPage())
+	}
+
+	currentPage := p.GetPage(uint32(p.CurrentPageIndex))
+
+	if currentPage.hasSufficientSpace(data) {
+		currentPage.appendBytes(data)
+	} else {
+		p.Pages = append(p.Pages, NewPage())
+		p.CurrentPageIndex++
+		if p.CurrentPageIndex >= int32(p.NumPages) {
+			p.NumPages = uint32(p.CurrentPageIndex) + 1
+		}
+
+		currentPage = p.Pages[p.CurrentPageIndex]
+		currentPage.appendBytes(data)
+	}
 }
 
 func (p *Pager) ReadNextValue() []byte {
@@ -63,19 +81,47 @@ func (p *Pager) ReadNextValue() []byte {
 }
 
 func (p *Pager) ReadWholeCurrentPage() []byte {
-	p.File.Sync()
-	p.File.Seek(0, 0)
+	values2 := make([]byte, 0)
+	// var relevantLen uint32 = 0
 
-	stat, _ := p.File.Stat()
-	s := stat.Size()
+	var ind uint32
+	for ind = 0; ind < p.NumPages; ind++ {
+		currentPage := p.GetPage(ind)
+		values2 = append(values2, currentPage.data2[:]...)
+		// relevantLen += currentPage.getRelevantLen()
+	}
 
-	values := make([]byte, s)
+	// fmt.Println("values len:", relevantLen)
+	// fmt.Println("num pages:", len(p.Pages))
 
-	p.File.Read(values)
+	return values2
+}
 
-	return values
+func (p *Pager) GetPage(ind uint32) *Page {
+	if ind < p.NumPages {
+		if p.Pages[ind] == nil {
+			p.Pages[ind] = NewPage()
+			tempBytes := make([]byte, PAGESIZE)
+			read, _ := p.File.ReadAt(tempBytes, int64(PAGESIZE*ind))
+			p.Pages[ind].appendBytes(tempBytes[:read])
+		}
+	} else {
+		newPages := make([]*Page, ind-p.NumPages+1)
+		p.Pages = append(p.Pages, newPages...)
+		p.Pages[ind] = NewPage()
+		p.NumPages++
+	}
+	return p.Pages[ind]
 }
 
 func (p *Pager) ClearPager() {
+	for ind, page := range p.Pages {
+		if ind < len(p.Pages)-1 {
+			p.File.Write(page.data2[:])
+		} else {
+			p.File.Write(page.data2[:page.currentIndex])
+		}
+	}
+
 	p.File.Close()
 }
