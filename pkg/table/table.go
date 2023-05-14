@@ -24,8 +24,9 @@ func NewTable() *Table {
 	return table
 }
 
-func (t *Table) Insert(key any, data []byte) {
-	t.Pager.AddToCurrentPage(data)
+func (t *Table) Insert(key uint32, data []byte) {
+	//t.Pager.AddToCurrentPage(key, data)
+	t.Pager.AddNewData(key, data)
 }
 
 func (t *Table) Select() []byte {

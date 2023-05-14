@@ -14,6 +14,7 @@ type Pager struct {
 	CurrentPageIndex  int32
 	CurrentValueIndex uint32
 	NumPages          uint32
+	RootPage          uint32
 }
 
 func NewPager(filename string) *Pager {
@@ -41,12 +42,27 @@ func NewPager(filename string) *Pager {
 		SizesWritten:      make([]uint32, 0),
 		CurrentValueIndex: 0,
 		NumPages:          uint32(numPages),
+		RootPage:          0,
 	}
 
 	return pager
 }
 
-func (p *Pager) AddToCurrentPage(data []byte) {
+func (p *Pager) AddNewData(key uint32, data []byte) {
+	if p.NumPages == 0 {
+		p.NumPages = 1
+		p.CurrentPageIndex = 0
+		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0))
+	}
+
+	root := p.GetPage(p.RootPage)
+	index := root.findIndexForKey(key)
+	//if root.cells[index].key != key {
+	root.insertDataAtIndex(index, key, data)
+	//}
+}
+
+func (p *Pager) AddToCurrentPage(key uint32, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
 		p.CurrentPageIndex = 0

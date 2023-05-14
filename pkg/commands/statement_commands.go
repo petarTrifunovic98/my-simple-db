@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/petarTrifunovic98/my-simple-db/pkg/paging"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/row"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/serialization"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
@@ -34,12 +35,12 @@ func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 
 	i := 0
 	for {
-		startIndex := i * 4096
+		startIndex := i * paging.PAGESIZE
 		if startIndex >= len(values) {
 			return s.code
 		}
 
-		endIndex := (i + 1) * 4096
+		endIndex := (i + 1) * paging.PAGESIZE
 
 		var b *bytes.Buffer
 
