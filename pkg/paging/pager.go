@@ -1,6 +1,7 @@
 package paging
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 )
@@ -29,8 +30,8 @@ func NewPager(filename string) *Pager {
 	stat, _ := file.Stat()
 	size := stat.Size()
 
-	numPages := size / PAGESIZE
-	if size%PAGESIZE != 0 {
+	numPages := size / PAGE_SIZE
+	if size%PAGE_SIZE != 0 {
 		numPages++
 	}
 	fmt.Println("Num pages:", numPages)
@@ -71,7 +72,7 @@ func (p *Pager) AddToCurrentPage(key uint32, data []byte) {
 
 	currentPage := p.GetPage(uint32(p.CurrentPageIndex))
 
-	if currentPage.hasSufficientSpace(data) {
+	if currentPage.hasSufficientSpaceTemp(data) {
 		currentPage.appendBytes(data)
 	} else {
 		p.Pages = append(p.Pages, NewPage())
@@ -117,8 +118,8 @@ func (p *Pager) GetPage(ind uint32) *Page {
 	if ind < p.NumPages {
 		if p.Pages[ind] == nil {
 			p.Pages[ind] = NewPage()
-			tempBytes := make([]byte, PAGESIZE)
-			read, _ := p.File.ReadAt(tempBytes, int64(PAGESIZE*ind))
+			tempBytes := make([]byte, PAGE_SIZE)
+			read, _ := p.File.ReadAt(tempBytes, int64(PAGE_SIZE*ind))
 			p.Pages[ind].appendBytes(tempBytes[:read])
 		}
 	} else {
@@ -137,6 +138,30 @@ func (p *Pager) ClearPager() {
 		} else {
 			p.File.Write(page.data2[:page.currentIndex])
 		}
+	}
+
+	p.File.Close()
+}
+
+func (p *Pager) ClearPagerTemp() {
+	for _, page := range p.Pages {
+		pageBytes := make([]byte, 0, PAGE_SIZE)
+		nodeBytes := page.nodeHeader.Serialize()
+		pageBytes = append(pageBytes, nodeBytes...)
+
+		for _, cell := range page.cells {
+			keyBytes := make([]byte, 4)
+			binary.LittleEndian.PutUint32(keyBytes, cell.key)
+			pageBytes = append(pageBytes, keyBytes...)
+
+			pageBytes = append(pageBytes, cell.data...)
+		}
+
+		additionalBytes := make([]byte, PAGE_SIZE-len(pageBytes))
+		pageBytes = append(pageBytes, additionalBytes...)
+
+		n, _ := p.File.Write(pageBytes)
+		fmt.Println("Written", n, "bytes for the page")
 	}
 
 	p.File.Close()

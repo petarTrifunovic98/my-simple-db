@@ -35,5 +35,6 @@ func (t *Table) Select() []byte {
 }
 
 func (t *Table) DestroyTable() {
-	t.Pager.ClearPager()
+	// t.Pager.ClearPager()
+	t.Pager.ClearPagerTemp()
 }

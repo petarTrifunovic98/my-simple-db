@@ -2,7 +2,8 @@ package paging
 
 import "fmt"
 
-const PAGESIZE = 4096
+const PAGE_SIZE = 4096
+const KEY_SIZE uint32 = 32
 
 type Cell struct {
 	key  uint32
@@ -14,13 +15,12 @@ func (c *Cell) Print() {
 }
 
 type Page struct {
-	nodeType     NodeType
-	isRoot       bool
-	parent       uint32
-	cells        []*Cell
-	numCells     uint32
-	data2        [PAGESIZE]byte
-	currentIndex int
+	nodeHeader       *NodeHeader
+	cells            []*Cell
+	numCells         uint32
+	data2            [PAGE_SIZE]byte
+	currentIndex     int
+	currentCellsSize uint32
 }
 
 func NewPage() *Page {
@@ -35,12 +35,15 @@ func NewPage() *Page {
 
 func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32) *Page {
 	p := &Page{
-		nodeType:     nodeType,
-		isRoot:       isRoot,
-		parent:       parent,
-		cells:        make([]*Cell, 0),
-		numCells:     0,
-		currentIndex: 0,
+		nodeHeader: &NodeHeader{
+			nodeType: nodeType,
+			isRoot:   isRoot,
+			parent:   parent,
+		},
+		cells:            make([]*Cell, 0),
+		numCells:         0,
+		currentIndex:     0,
+		currentCellsSize: 0,
 	}
 
 	return p
@@ -86,6 +89,7 @@ func (p *Page) insertDataAtIndex(index uint32, key uint32, data []byte) {
 	}
 
 	p.numCells++
+	p.currentCellsSize += KEY_SIZE + uint32(len(data))
 
 	for _, c := range p.cells {
 		c.Print()
@@ -93,13 +97,15 @@ func (p *Page) insertDataAtIndex(index uint32, key uint32, data []byte) {
 }
 
 func (p *Page) hasSufficientSpace(newData []byte) bool {
-	// if (len(p.data) + len(newData)) > cap(p.data) {
-	// 	return false
-	// } else {
-	// 	return true
-	// }
+	if (p.currentIndex + len(newData)) >= PAGE_SIZE {
+		return false
+	} else {
+		return true
+	}
+}
 
-	if (p.currentIndex + len(newData)) >= PAGESIZE {
+func (p *Page) hasSufficientSpaceTemp(newData []byte) bool {
+	if p.currentCellsSize+uint32(len(newData))+KEY_SIZE >= PAGE_SIZE {
 		return false
 	} else {
 		return true

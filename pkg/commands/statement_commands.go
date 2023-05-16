@@ -35,12 +35,12 @@ func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 
 	i := 0
 	for {
-		startIndex := i * paging.PAGESIZE
+		startIndex := i * paging.PAGE_SIZE
 		if startIndex >= len(values) {
 			return s.code
 		}
 
-		endIndex := (i + 1) * paging.PAGESIZE
+		endIndex := (i + 1) * paging.PAGE_SIZE
 
 		var b *bytes.Buffer
 
