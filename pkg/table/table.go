@@ -25,17 +25,14 @@ func NewTable() *Table {
 }
 
 func (t *Table) Insert(key uint32, data []byte) {
-	//t.Pager.AddToCurrentPage(key, data)
 	t.Pager.AddNewData(key, data)
 }
 
 func (t *Table) Select() []byte {
-	//values := t.Pager.ReadWholeCurrentPage()
 	values := t.Pager.ReadWholeCurrentPageTemp()
 	return values
 }
 
 func (t *Table) DestroyTable() {
-	// t.Pager.ClearPager()
 	t.Pager.ClearPagerTemp()
 }
