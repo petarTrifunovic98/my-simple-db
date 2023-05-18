@@ -19,7 +19,6 @@ func (c *Cell) Print() {
 type Page struct {
 	nodeHeader       *NodeHeader
 	cells            []*Cell
-	data2            [PAGE_SIZE]byte
 	currentIndex     int
 	currentCellsSize uint32
 }
@@ -97,25 +96,12 @@ func (p *Page) insertDataAtIndex(index uint32, key uint32, data []byte) {
 	}
 }
 
-func (p *Page) hasSufficientSpace(newData []byte) bool {
-	if (p.currentIndex + len(newData)) >= PAGE_SIZE {
-		return false
-	} else {
-		return true
-	}
-}
-
 func (p *Page) hasSufficientSpaceTemp(newData []byte) bool {
 	if p.currentCellsSize+uint32(len(newData))+KEY_SIZE+DATA_SIZE_SIZE >= PAGE_SIZE {
 		return false
 	} else {
 		return true
 	}
-}
-
-func (p *Page) appendBytes(newData []byte) {
-	copy(p.data2[p.currentIndex:p.currentIndex+len(newData)], newData)
-	p.currentIndex += len(newData)
 }
 
 func (p *Page) getRelevantLen() uint32 {
