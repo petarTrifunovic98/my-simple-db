@@ -53,10 +53,10 @@ func (p *Pager) AddNewData(key uint32, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
 		p.CurrentPageIndex = 0
-		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0))
+		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0, 0))
 	}
 
-	root := p.GetPage(p.RootPage)
+	root := p.GetPageTemp(p.RootPage)
 	index := root.findIndexForKey(key)
 	//if root.cells[index].key != key {
 	root.insertDataAtIndex(index, key, data)
@@ -114,6 +114,27 @@ func (p *Pager) ReadWholeCurrentPage() []byte {
 	return values2
 }
 
+func (p *Pager) ReadWholeCurrentPageTemp() []byte {
+	values2 := make([]byte, 0)
+	// var relevantLen uint32 = 0
+
+	var ind uint32
+	for ind = 0; ind < p.NumPages; ind++ {
+		currentPage := p.GetPageTemp(ind)
+		for _, cell := range currentPage.cells {
+			values2 = append(values2, cell.data...)
+		}
+
+		//values2 = append(values2, currentPage.data2[:]...)
+		// relevantLen += currentPage.getRelevantLen()
+	}
+
+	// fmt.Println("values len:", relevantLen)
+	// fmt.Println("num pages:", len(p.Pages))
+
+	return values2
+}
+
 func (p *Pager) GetPage(ind uint32) *Page {
 	if ind < p.NumPages {
 		if p.Pages[ind] == nil {
@@ -121,6 +142,41 @@ func (p *Pager) GetPage(ind uint32) *Page {
 			tempBytes := make([]byte, PAGE_SIZE)
 			read, _ := p.File.ReadAt(tempBytes, int64(PAGE_SIZE*ind))
 			p.Pages[ind].appendBytes(tempBytes[:read])
+		}
+	} else {
+		newPages := make([]*Page, ind-p.NumPages+1)
+		p.Pages = append(p.Pages, newPages...)
+		p.Pages[ind] = NewPage()
+		p.NumPages++
+	}
+	return p.Pages[ind]
+}
+
+func (p *Pager) GetPageTemp(ind uint32) *Page {
+	if ind < p.NumPages {
+		if p.Pages[ind] == nil {
+			tempBytes := make([]byte, PAGE_SIZE)
+			p.File.ReadAt(tempBytes, int64(PAGE_SIZE*ind))
+			nodeHeader := &NodeHeader{}
+			nodeHeader.Deserialize(tempBytes)
+			cellBytes := tempBytes[NODE_HEADER_SIZE:]
+			currentIndex := 0
+
+			p.Pages[ind] = NewPageWithParams(LEAF_NODE, true, nodeHeader.parent, nodeHeader.numCells)
+
+			for i := 0; uint32(i) < nodeHeader.numCells; i++ {
+				key := binary.LittleEndian.Uint32(cellBytes[currentIndex : currentIndex+4])
+				currentIndex += 4
+				dataSize := binary.LittleEndian.Uint32(cellBytes[currentIndex : currentIndex+4])
+				currentIndex += 4
+				data := cellBytes[currentIndex : currentIndex+int(dataSize)]
+				currentIndex += int(dataSize)
+				p.Pages[ind].cells = append(p.Pages[ind].cells, &Cell{
+					data:     data,
+					dataSize: dataSize,
+					key:      key,
+				})
+			}
 		}
 	} else {
 		newPages := make([]*Page, ind-p.NumPages+1)
@@ -153,6 +209,10 @@ func (p *Pager) ClearPagerTemp() {
 			keyBytes := make([]byte, 4)
 			binary.LittleEndian.PutUint32(keyBytes, cell.key)
 			pageBytes = append(pageBytes, keyBytes...)
+
+			dataSizeBytes := make([]byte, 4)
+			binary.LittleEndian.PutUint32(dataSizeBytes, cell.dataSize)
+			pageBytes = append(pageBytes, dataSizeBytes...)
 
 			pageBytes = append(pageBytes, cell.data...)
 		}

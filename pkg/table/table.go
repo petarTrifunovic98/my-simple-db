@@ -30,7 +30,8 @@ func (t *Table) Insert(key uint32, data []byte) {
 }
 
 func (t *Table) Select() []byte {
-	values := t.Pager.ReadWholeCurrentPage()
+	//values := t.Pager.ReadWholeCurrentPage()
+	values := t.Pager.ReadWholeCurrentPageTemp()
 	return values
 }
 
