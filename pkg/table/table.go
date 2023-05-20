@@ -33,6 +33,10 @@ func (t *Table) Select() []byte {
 	return values
 }
 
+func (t *Table) PrintInternalStructure() {
+	t.Pager.PrintPages()
+}
+
 func (t *Table) DestroyTable() {
 	t.Pager.ClearPagerTemp()
 }

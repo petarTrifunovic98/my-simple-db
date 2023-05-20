@@ -11,12 +11,17 @@ type NonStatementCommandType int8
 
 const (
 	NS_EXIT NonStatementCommandType = iota
+	NS_PRINT
 	NS_UNRECOGNIZED
 )
 
-type NonStatementExit struct {
+type NonStatementBase struct {
 	code             CommandExecutionStatusCode
 	nonStatementType NonStatementCommandType
+}
+
+type NonStatementExit struct {
+	NonStatementBase
 }
 
 func (ns *NonStatementExit) Execute(t *table.Table) CommandExecutionStatusCode {
@@ -33,15 +38,40 @@ func (ns *NonStatementExit) PrintPreExecution() {
 
 func NewNonStatementExit() *NonStatementExit {
 	nonStatement := &NonStatementExit{
-		nonStatementType: NS_EXIT,
+		NonStatementBase: NonStatementBase{
+			nonStatementType: NS_EXIT,
+		},
+	}
+
+	return nonStatement
+}
+
+type NonStatementPrint struct {
+	NonStatementBase
+}
+
+func (ns *NonStatementPrint) Execute(t *table.Table) CommandExecutionStatusCode {
+	t.PrintInternalStructure()
+	ns.code = SUCCESS
+	return ns.code
+}
+
+func (ns *NonStatementPrint) PrintPreExecution() {
+	fmt.Println("Showing internal table structure")
+}
+
+func NewNonStatementPrint() *NonStatementPrint {
+	nonStatement := &NonStatementPrint{
+		NonStatementBase: NonStatementBase{
+			nonStatementType: NS_PRINT,
+		},
 	}
 
 	return nonStatement
 }
 
 type NonStatementUnrecognized struct {
-	code             CommandExecutionStatusCode
-	nonStatementType NonStatementCommandType
+	NonStatementBase
 }
 
 func (ns *NonStatementUnrecognized) Execute(t *table.Table) CommandExecutionStatusCode {
@@ -55,7 +85,9 @@ func (ns *NonStatementUnrecognized) PrintPreExecution() {
 
 func NewNonStatementUnrecognized() *NonStatementUnrecognized {
 	nonStatement := &NonStatementUnrecognized{
-		nonStatementType: NS_UNRECOGNIZED,
+		NonStatementBase: NonStatementBase{
+			nonStatementType: NS_UNRECOGNIZED,
+		},
 	}
 
 	return nonStatement

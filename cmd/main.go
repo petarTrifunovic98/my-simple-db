@@ -73,6 +73,8 @@ func getCommandType(input string) commands.CommandType {
 func getNonStatementCommand(input string) commands.Command {
 	if input == ".exit" {
 		return commands.NewNonStatementExit()
+	} else if input == ".print" {
+		return commands.NewNonStatementPrint()
 	} else {
 		return commands.NewNonStatementUnrecognized()
 	}

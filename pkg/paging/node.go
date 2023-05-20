@@ -59,3 +59,11 @@ func (nh *NodeHeader) Deserialize(nodeHeaderBytes []byte) {
 	nh.parent = binary.LittleEndian.Uint32(nodeHeaderBytes[2:6])
 	nh.numCells = binary.LittleEndian.Uint32(nodeHeaderBytes[6:10])
 }
+
+func (nh *NodeHeader) Print() {
+	if nh.nodeType == LEAF_NODE {
+		fmt.Println("leaf node with", nh.numCells, "cells")
+	} else {
+		fmt.Println("internal node with", nh.numCells, "cells")
+	}
+}
