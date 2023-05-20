@@ -19,19 +19,18 @@ func (c *Cell) Print() {
 type Page struct {
 	nodeHeader       *NodeHeader
 	cells            []*Cell
-	currentIndex     int
 	currentCellsSize uint32
 }
 
 func NewPage() *Page {
 	p := &Page{
-		cells:        make([]*Cell, 0),
-		currentIndex: 0,
+		cells: make([]*Cell, 0),
 	}
 
 	return p
 }
 
+// NEXT STEP: implement internal node creation
 func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint32) *Page {
 	p := &Page{
 		nodeHeader: &NodeHeader{
@@ -40,8 +39,8 @@ func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells u
 			parent:   parent,
 			numCells: numCells,
 		},
+		// TODO: make use of the numCells parameter for more efficient cell addition
 		cells:            make([]*Cell, 0),
-		currentIndex:     0,
 		currentCellsSize: 0,
 	}
 
@@ -96,6 +95,33 @@ func (p *Page) insertDataAtIndex(index uint32, key uint32, data []byte) {
 	}
 }
 
+func (p *Page) transferCells(startIndSource int, destination *Page) {
+	destination.cells = append(destination.cells, p.cells[startIndSource:]...)
+	destination.nodeHeader.numCells = uint32(len(destination.cells))
+	destination.calculateAndSetCurrentCellsSize()
+
+	p.cells = p.cells[:startIndSource]
+	p.nodeHeader.numCells = uint32(len(p.cells))
+	p.calculateAndSetCurrentCellsSize()
+}
+
+func (p *Page) calculateAndSetCurrentCellsSize() {
+	var size uint32 = 0
+	for _, cell := range p.cells {
+		size += KEY_SIZE + DATA_SIZE_SIZE + uint32(len(cell.data))
+	}
+
+	p.currentCellsSize = size
+}
+
+func (p *Page) getMaxKey() (bool, uint32) {
+	if p.nodeHeader.numCells <= 0 {
+		return false, 0
+	} else {
+		return true, p.cells[p.nodeHeader.numCells-1].key
+	}
+}
+
 func (p *Page) hasSufficientSpaceTemp(newData []byte) bool {
 	if p.currentCellsSize+uint32(len(newData))+KEY_SIZE+DATA_SIZE_SIZE >= PAGE_SIZE {
 		return false
@@ -104,6 +130,10 @@ func (p *Page) hasSufficientSpaceTemp(newData []byte) bool {
 	}
 }
 
-func (p *Page) getRelevantLen() uint32 {
-	return uint32(p.currentIndex)
+func (p *Page) Print() {
+	p.nodeHeader.Print()
+	for i := 0; uint32(i) < p.nodeHeader.numCells; i++ {
+		cell := p.cells[i]
+		fmt.Println("cell number", i, ": key =", cell.key)
+	}
 }

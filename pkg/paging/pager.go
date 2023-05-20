@@ -12,7 +12,6 @@ type Pager struct {
 	Pages             []*Page
 	File              *os.File
 	SizesWritten      []uint32
-	CurrentPageIndex  int32
 	CurrentValueIndex uint32
 	NumPages          uint32
 	RootPage          uint32
@@ -38,7 +37,6 @@ func NewPager(filename string) *Pager {
 
 	pager := &Pager{
 		Pages:             make([]*Page, numPages, MAX_PAGES_PER_TABLE),
-		CurrentPageIndex:  int32(numPages) - 1,
 		File:              file,
 		SizesWritten:      make([]uint32, 0),
 		CurrentValueIndex: 0,
@@ -52,25 +50,34 @@ func NewPager(filename string) *Pager {
 func (p *Pager) AddNewData(key uint32, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
-		p.CurrentPageIndex = 0
 		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0, 0))
 	}
 
 	root := p.GetPageTemp(p.RootPage)
-	// TODO: ask if there is sufficient space here; use something like this:
-	// p.Pages = append(p.Pages, NewPage())
-	// p.CurrentPageIndex++
-	// if p.CurrentPageIndex >= int32(p.NumPages) {
-	// 	p.NumPages = uint32(p.CurrentPageIndex) + 1
-	// }
+	var pageToInsert *Page
 
-	// currentPage = p.Pages[p.CurrentPageIndex]
-	// currentPage.appendBytes(data)
+	if root.hasSufficientSpaceTemp(data) {
+		pageToInsert = root
+	} else {
+		// NEXT STEP: create a new root node
+		newPage := NewPageWithParams(LEAF_NODE, false, 0, 0)
 
-	index := root.findIndexForKey(key)
-	//if root.cells[index].key != key {
+		// TODO: implement usage of old page index; don't just append in any case
+		p.Pages = append(p.Pages, newPage)
+		p.NumPages++
+
+		root.transferCells(int(root.nodeHeader.numCells)/2, newPage)
+
+		if _, leftNodeMaxKey := root.getMaxKey(); key <= leftNodeMaxKey {
+			pageToInsert = root
+		} else {
+			pageToInsert = newPage
+		}
+	}
+
+	index := pageToInsert.findIndexForKey(key)
+	pageToInsert.insertDataAtIndex(index, key, data)
 	root.insertDataAtIndex(index, key, data)
-	//}
 }
 
 func (p *Pager) ReadWholeCurrentPageTemp() []byte {
@@ -155,4 +162,13 @@ func (p *Pager) ClearPagerTemp() {
 	}
 
 	p.File.Close()
+}
+
+func (p *Pager) PrintPages() {
+	for ind, page := range p.Pages {
+		if page == nil {
+			page = p.GetPageTemp(uint32(ind))
+		}
+		page.Print()
+	}
 }
