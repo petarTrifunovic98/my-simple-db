@@ -1,6 +1,7 @@
 package paging
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 )
@@ -57,28 +58,78 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 	if root.hasSufficientSpace(data) {
 		pageToInsert = root
 	} else {
-		// NEXT STEP: create a new root node
-		// newPage := NewPageWithParams(LEAF_NODE, false, 0, 0)
+		/**
+		 * This executes when root is full, in order to split it.
+		 * Currently works only when root was leaf, and should now
+		 * be split into two children with new root.
+		 * Parts are hard coded, such as the index of RootPage,
+		 * or the parameter "2" in the transferCells function.
+		 * TODO: Remove hard coded parts
+		 */
+		newPage := NewPageWithParams(LEAF_NODE, false, 0, 0, 0)
+		newRoot := NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
 
-		// // TODO: implement usage of old page index; don't just append in any case
-		// p.Pages = append(p.Pages, newPage)
-		// p.NumPages++
+		p.Pages = append(p.Pages, newPage, newRoot)
+		p.NumPages += 2
+		p.RootPage = 2
+		root.transferCells(0, 2, newRoot, newPage)
 
-		// root.transferCells(int(root.nodeHeader.numCells)/2, newPage)
+		// Currently, new root can have only one value, created when splitting the old root
+		rootKey := newRoot.getKey(0)
 
-		// if _, leftNodeMaxKey := root.getMaxKey(); key <= leftNodeMaxKey {
-		// 	pageToInsert = root
-		// } else {
-		// 	pageToInsert = newPage
-		// }
+		/**
+		 * Compare the root key and the key of new data,
+		 * in order to decide which child gets the new element.
+		 * Should be implemented as recursive search through nodes.
+		 */
+		compareResult := bytes.Compare(rootKey, key)
+		if compareResult == -1 {
+			pageToInsert = newPage
+		} else {
+			pageToInsert = root
+		}
 	}
 
 	index := pageToInsert.findIndexForKey(key)
 	pageToInsert.insertDataAtIndex(index, key, data)
 }
 
+func (p *Pager) ReadAllPages() []byte {
+	/**
+	 * Reads all the pages in a sorted order.
+	 * Sorting is currently hard coded and works only
+	 * for a tree with a root node which has only
+	 * two children.
+	 */
+	values := p.ReadPageAtInd(0)
+	if p.RootPage == 2 {
+		fmt.Println("Reading from more than one page...")
+		values = append(values, p.ReadPageAtInd(2)...)
+		values = append(values, p.ReadPageAtInd(1)...)
+	}
+
+	fmt.Println("Values len:", len(values))
+	return values
+}
+
+func (p *Pager) ReadPageAtInd(ind uint32) []byte {
+	values := make([]byte, 0)
+	// var relevantLen uint32 = 0
+
+	currentPage := p.GetPage(ind)
+
+	for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
+		values = append(values, currentPage.getData(uint16(i))...)
+	}
+
+	// fmt.Println("values len:", relevantLen)
+	// fmt.Println("num pages:", len(p.Pages))
+
+	return values
+}
+
 func (p *Pager) ReadWholeCurrentPage() []byte {
-	values2 := make([]byte, 0)
+	values := make([]byte, 0)
 	// var relevantLen uint32 = 0
 
 	var ind uint32
@@ -86,7 +137,7 @@ func (p *Pager) ReadWholeCurrentPage() []byte {
 		currentPage := p.GetPage(ind)
 
 		for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
-			values2 = append(values2, currentPage.getData(uint16(i))...)
+			values = append(values, currentPage.getData(uint16(i))...)
 		}
 
 		//values2 = append(values2, currentPage.data2[:]...)
@@ -96,7 +147,7 @@ func (p *Pager) ReadWholeCurrentPage() []byte {
 	// fmt.Println("values len:", relevantLen)
 	// fmt.Println("num pages:", len(p.Pages))
 
-	return values2
+	return values
 }
 
 func (p *Pager) GetPage(ind uint32) *Page {

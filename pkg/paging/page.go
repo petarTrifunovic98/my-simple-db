@@ -123,7 +123,7 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
 		copy(cells[nthOffset+keySize+2:nthOffset+keySize+2+dataLen16], data)
 
 		// Shift the necessary offsets to the right in the offsets list
-		for i := p.nodeHeader.numCells - 1; i >= ind; i-- {
+		for i := p.nodeHeader.numCells - 1; int16(i) >= int16(ind); i-- {
 			// Get the old offset at index i
 			oldOffset := binary.LittleEndian.Uint16(offsets[i*OFFSET_SIZE:])
 			// Update the old index by adding new cell size
@@ -151,15 +151,68 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
 
 }
 
-// func (p *Page) transferCells(startIndSource int, destination *Page) {
-// 	destination.cells = append(destination.cells, p.cells[startIndSource:]...)
-// 	destination.nodeHeader.numCells = uint16(len(destination.cells))
-// 	destination.calculateAndSetCurrentCellsSize()
+/**
+ * Currently:
+ *  - splits the page "p", sends the middle element to "newParent"
+ *  and sends all elements greater than the middle one to "destination"
+ *  - works only for splitting a leaf node which was previously root, thus
+ *  making the "newParent" page the node root
+ * Should be updated to:
+ *  - work with any leaf node
+ */
+func (p *Page) transferCells(startIndSource int, newParentInd uint32, newParent *Page, destination *Page) {
 
-// 	p.cells = p.cells[:startIndSource]
-// 	p.nodeHeader.numCells = uint16(len(p.cells))
-// 	p.calculateAndSetCurrentCellsSize()
-// }
+	// find the offset of the middle element
+	middleElementOffset := p.getOffset(p.nodeHeader.numCells / 2)
+
+	// find the offset of the element next to the middle one (right neighbour)
+	nextToMiddleElementOffset := p.getOffset(p.nodeHeader.numCells/2 + 1)
+
+	// preserve old values from the "p" page
+	oldStartOfCells := p.getStartOfCells()
+	oldTotalBodySize := p.nodeHeader.totalBodySize
+
+	/**
+	 * update number of cells; newParent gets one new element,
+	 * while children are left with half of the previous number
+	 * of elements
+	 */
+	newParent.nodeHeader.numCells++
+	destination.nodeHeader.numCells = (p.nodeHeader.numCells - 1) / 2
+	p.nodeHeader.numCells /= 2
+
+	// update total body size according to new elements added to each page
+	newParent.nodeHeader.totalBodySize += OFFSET_SIZE + (nextToMiddleElementOffset - middleElementOffset)
+	destination.nodeHeader.totalBodySize =
+		destination.nodeHeader.numCells*OFFSET_SIZE + (p.nodeHeader.totalBodySize - oldStartOfCells - nextToMiddleElementOffset)
+	p.nodeHeader.totalBodySize = p.nodeHeader.numCells*OFFSET_SIZE + middleElementOffset
+
+	p.nodeHeader.isRoot = false
+	p.nodeHeader.parent = newParentInd
+	destination.nodeHeader.parent = newParentInd
+
+	/**
+	 * Update the offsets list of new parent and new child
+	 */
+	// redundant, but serves for logical purposes
+	copy(newParent.nodeBody[:], []byte{0, 0})
+	// move offsets from the existing child to the new one, updating them in the process
+	for i := uint16(0); i < destination.nodeHeader.numCells; i++ {
+		offset := p.getOffset(p.nodeHeader.numCells + 1 + i)
+		offset -= nextToMiddleElementOffset
+		binary.LittleEndian.PutUint16(destination.nodeBody[i*OFFSET_SIZE:], offset)
+	}
+
+	/**
+	 * Transfer data to new pages
+	 */
+	copy(newParent.nodeBody[OFFSET_SIZE:],
+		p.nodeBody[oldStartOfCells+middleElementOffset:oldStartOfCells+nextToMiddleElementOffset])
+	copy(destination.nodeBody[destination.nodeHeader.numCells*OFFSET_SIZE:],
+		p.nodeBody[oldStartOfCells+nextToMiddleElementOffset:oldTotalBodySize])
+	// for the existing node, just shift data left, since the number of offsets is decreased
+	copy(p.nodeBody[p.nodeHeader.numCells*OFFSET_SIZE:], p.nodeBody[oldStartOfCells:p.nodeHeader.totalBodySize])
+}
 
 // func (p *Page) calculateAndSetCurrentCellsSize() {
 // 	var size uint16 = 0
@@ -178,7 +231,9 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
 
 func (p *Page) hasSufficientSpace(newData []byte) bool {
 	// TODO: check if there is enough space for new data
-	return true
+	oldSize := NODE_HEADER_SIZE + p.nodeHeader.totalBodySize
+	newSize := oldSize + uint16(len(newData)) + p.nodeHeader.keySize + DATA_SIZE_SIZE
+	return newSize <= PAGE_SIZE
 }
 
 func (p *Page) Print() {

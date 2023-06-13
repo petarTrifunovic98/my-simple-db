@@ -29,7 +29,8 @@ func (t *Table) Insert(key []byte, data []byte) {
 }
 
 func (t *Table) Select() []byte {
-	values := t.Pager.ReadWholeCurrentPage()
+	// values := t.Pager.ReadWholeCurrentPage()
+	values := t.Pager.ReadAllPages()
 	return values
 }
 
