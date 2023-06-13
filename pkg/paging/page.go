@@ -3,39 +3,33 @@ package paging
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 )
 
 const PAGE_SIZE = 4096
 const KEY_SIZE uint16 = 4
 const DATA_SIZE_SIZE uint16 = 2
 
-type Cell struct {
-	key      uint32
-	dataSize uint32
-	data     []byte
-}
-
-func (c *Cell) Print() {
-	fmt.Println("key:", c.key)
-}
+/**
+ * Node body outline:
+ * - first a list of offsets; each offset is 2 bytes; each value represents
+ *	the offset from the beginning of the list of cells
+ * - after offset list, a list of cells; each cell consists of a key of size
+ * which is recorded in the node header, a 2 byte value which represents the
+ * size of data in bytes, and the actual data
+ * |    offset list		|                            cells list                                |
+ * |--------------------|----------------------------------------------------------------------|
+ * |number of cells * 2B|key (keysize*1B), data size (DATA_SIZE_SIZE*1b), data (data size * 1B)|
+ */
 
 const OFFSET_SIZE = 2
 
 type Page struct {
-	nodeHeader *NodeHeader
-
-	// TODO: Switch to a fix-sized array of objects, instead of a slice of pointers
-	// Do this to actually implement paging
-	cells            []*Cell
-	nodeBody         [PAGE_SIZE - NODE_HEADER_SIZE]byte
-	currentCellsSize uint16
+	nodeHeader NodeHeader
+	nodeBody   [PAGE_SIZE - NODE_HEADER_SIZE]byte
 }
 
 func NewPage() *Page {
-	p := &Page{
-		cells: make([]*Cell, 0),
-	}
+	p := &Page{}
 
 	return p
 }
@@ -43,7 +37,7 @@ func NewPage() *Page {
 // NEXT STEP: implement internal node creation
 func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *Page {
 	p := &Page{
-		nodeHeader: &NodeHeader{
+		nodeHeader: NodeHeader{
 			nodeType:      nodeType,
 			isRoot:        isRoot,
 			parent:        parent,
@@ -51,9 +45,6 @@ func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells u
 			totalBodySize: totalBodySize,
 			keySize:       KEY_SIZE,
 		},
-		// TODO: make use of the numCells parameter for more efficient cell addition
-		cells:            make([]*Cell, 0),
-		currentCellsSize: 0,
 	}
 
 	return p
@@ -160,32 +151,30 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
 
 }
 
-func (p *Page) transferCells(startIndSource int, destination *Page) {
-	destination.cells = append(destination.cells, p.cells[startIndSource:]...)
-	destination.nodeHeader.numCells = uint16(len(destination.cells))
-	destination.calculateAndSetCurrentCellsSize()
+// func (p *Page) transferCells(startIndSource int, destination *Page) {
+// 	destination.cells = append(destination.cells, p.cells[startIndSource:]...)
+// 	destination.nodeHeader.numCells = uint16(len(destination.cells))
+// 	destination.calculateAndSetCurrentCellsSize()
 
-	p.cells = p.cells[:startIndSource]
-	p.nodeHeader.numCells = uint16(len(p.cells))
-	p.calculateAndSetCurrentCellsSize()
-}
+// 	p.cells = p.cells[:startIndSource]
+// 	p.nodeHeader.numCells = uint16(len(p.cells))
+// 	p.calculateAndSetCurrentCellsSize()
+// }
 
-func (p *Page) calculateAndSetCurrentCellsSize() {
-	var size uint16 = 0
-	for _, cell := range p.cells {
-		size += KEY_SIZE + DATA_SIZE_SIZE + uint16(len(cell.data))
-	}
+// func (p *Page) calculateAndSetCurrentCellsSize() {
+// 	var size uint16 = 0
+// 	for _, cell := range p.cells {
+// 		size += KEY_SIZE + DATA_SIZE_SIZE + uint16(len(cell.data))
+// 	}
+// }
 
-	p.currentCellsSize = size
-}
-
-func (p *Page) getMaxKey() (bool, uint32) {
-	if p.nodeHeader.numCells <= 0 {
-		return false, 0
-	} else {
-		return true, p.cells[p.nodeHeader.numCells-1].key
-	}
-}
+// func (p *Page) getMaxKey() (bool, uint32) {
+// 	if p.nodeHeader.numCells <= 0 {
+// 		return false, 0
+// 	} else {
+// 		return true, p.cells[p.nodeHeader.numCells-1].key
+// 	}
+// }
 
 func (p *Page) hasSufficientSpace(newData []byte) bool {
 	// TODO: check if there is enough space for new data
@@ -194,8 +183,8 @@ func (p *Page) hasSufficientSpace(newData []byte) bool {
 
 func (p *Page) Print() {
 	p.nodeHeader.Print()
-	for i := 0; uint16(i) < p.nodeHeader.numCells; i++ {
-		cell := p.cells[i]
-		fmt.Println("cell number", i, ": key =", cell.key)
-	}
+	//	for i := 0; uint16(i) < p.nodeHeader.numCells; i++ {
+	//		cell := p.cells[i]
+	//		fmt.Println("cell number", i, ": key =", cell.key)
+	//	}
 }
