@@ -123,14 +123,16 @@ func (p *Pager) GetPage(ind uint32) *Page {
 
 func (p *Pager) ClearPager() {
 	for _, page := range p.Pages {
-		pageBytes := make([]byte, PAGE_SIZE)
-		nodeBytes := page.nodeHeader.Serialize()
-		copy(pageBytes, nodeBytes)
+		if page != nil {
+			pageBytes := make([]byte, PAGE_SIZE)
+			nodeBytes := page.nodeHeader.Serialize()
+			copy(pageBytes, nodeBytes)
 
-		copy(pageBytes[NODE_HEADER_SIZE:], page.nodeBody[:])
+			copy(pageBytes[NODE_HEADER_SIZE:], page.nodeBody[:])
 
-		n, _ := p.File.Write(pageBytes)
-		fmt.Println("Written", n, "bytes for the page")
+			n, _ := p.File.Write(pageBytes)
+			fmt.Println("Written", n, "bytes for the page")
+		}
 	}
 
 	p.File.Close()
