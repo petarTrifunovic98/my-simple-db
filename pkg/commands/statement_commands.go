@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"strconv"
 	"strings"
@@ -28,7 +29,7 @@ type StatementSelect struct {
 func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 	s.code = SUCCESS
 
-	values := t.Select()
+	values := t.Select2()
 	if len(values) <= 0 {
 		return s.code
 	}
@@ -98,7 +99,9 @@ func (s *StatementInsert) Execute(t *table.Table) CommandExecutionStatusCode {
 
 		rowBytes := serialization.Serialize(newRow)
 
-		t.Insert(newRow.Id, rowBytes)
+		keyBytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(keyBytes, newRow.Id)
+		t.Insert2(keyBytes, rowBytes)
 
 		s.code = SUCCESS
 	}

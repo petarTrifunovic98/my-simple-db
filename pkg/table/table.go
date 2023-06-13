@@ -24,12 +24,12 @@ func NewTable() *Table {
 	return table
 }
 
-func (t *Table) Insert(key uint32, data []byte) {
-	t.Pager.AddNewData(key, data)
+func (t *Table) Insert2(key []byte, data []byte) {
+	t.Pager.AddNewData2(key, data)
 }
 
-func (t *Table) Select() []byte {
-	values := t.Pager.ReadWholeCurrentPageTemp()
+func (t *Table) Select2() []byte {
+	values := t.Pager.ReadWholeCurrentPage2()
 	return values
 }
 
@@ -37,6 +37,6 @@ func (t *Table) PrintInternalStructure() {
 	t.Pager.PrintPages()
 }
 
-func (t *Table) DestroyTable() {
-	t.Pager.ClearPagerTemp()
+func (t *Table) DestroyTable2() {
+	t.Pager.ClearPager2()
 }

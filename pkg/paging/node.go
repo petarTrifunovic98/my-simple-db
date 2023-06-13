@@ -12,13 +12,15 @@ const (
 	INTERNAL_NODE
 )
 
-const NODE_HEADER_SIZE = 1 + 1 + 4 + 4 //add the sizes of the types used in NodeHeader struct
+const NODE_HEADER_SIZE = 1 + 1 + 4 + 2 + 2 + 2 //add the sizes of the types used in NodeHeader struct
 
 type NodeHeader struct {
-	nodeType NodeType
-	isRoot   bool
-	parent   uint32
-	numCells uint32
+	nodeType      NodeType
+	isRoot        bool
+	parent        uint32
+	numCells      uint16
+	totalBodySize uint16
+	keySize       uint16
 }
 
 func (nh *NodeHeader) Serialize() []byte {
@@ -32,16 +34,26 @@ func (nh *NodeHeader) Serialize() []byte {
 	parentBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(parentBytes, nh.parent)
 
-	numCellsBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(numCellsBytes, nh.numCells)
+	numCellsBytes := make([]byte, 2)
+	binary.LittleEndian.PutUint16(numCellsBytes, nh.numCells)
 
-	nodeHeaderBytes := make([]byte, 0, len(parentBytes)+len(numCellsBytes)+2)
+	totalBodySizeBytes := make([]byte, 2)
+	binary.LittleEndian.PutUint16(totalBodySizeBytes, nh.totalBodySize)
+
+	keySizeBytes := make([]byte, 2)
+	binary.LittleEndian.PutUint16(keySizeBytes, nh.keySize)
+
+	nodeHeaderBytes := make([]byte, 0, NODE_HEADER_SIZE)
 	fmt.Println("Header byte len:", len(nodeHeaderBytes))
 	nodeHeaderBytes = append(nodeHeaderBytes, nodeTypeBytes, isRootBytes)
 	fmt.Println("Header byte len:", len(nodeHeaderBytes))
 	nodeHeaderBytes = append(nodeHeaderBytes, parentBytes...)
 	fmt.Println("Header byte len:", len(nodeHeaderBytes))
 	nodeHeaderBytes = append(nodeHeaderBytes, numCellsBytes...)
+	fmt.Println("Header byte len:", len(nodeHeaderBytes))
+	nodeHeaderBytes = append(nodeHeaderBytes, totalBodySizeBytes...)
+	fmt.Println("Header byte len:", len(nodeHeaderBytes))
+	nodeHeaderBytes = append(nodeHeaderBytes, keySizeBytes...)
 
 	fmt.Println("Header byte len:", len(nodeHeaderBytes))
 
@@ -57,7 +69,9 @@ func (nh *NodeHeader) Deserialize(nodeHeaderBytes []byte) {
 	}
 
 	nh.parent = binary.LittleEndian.Uint32(nodeHeaderBytes[2:6])
-	nh.numCells = binary.LittleEndian.Uint32(nodeHeaderBytes[6:10])
+	nh.numCells = binary.LittleEndian.Uint16(nodeHeaderBytes[6:8])
+	nh.totalBodySize = binary.LittleEndian.Uint16(nodeHeaderBytes[8:10])
+	nh.keySize = binary.LittleEndian.Uint16(nodeHeaderBytes[10:12])
 }
 
 func (nh *NodeHeader) Print() {

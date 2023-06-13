@@ -1,25 +1,35 @@
 package paging
 
-import "fmt"
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+)
 
 const PAGE_SIZE = 4096
-const KEY_SIZE uint32 = 4
-const DATA_SIZE_SIZE uint32 = 4
+const KEY_SIZE uint16 = 4
+const DATA_SIZE_SIZE uint16 = 2
 
 type Cell struct {
-	data     []byte
-	dataSize uint32
 	key      uint32
+	dataSize uint32
+	data     []byte
 }
 
 func (c *Cell) Print() {
 	fmt.Println("key:", c.key)
 }
 
+const OFFSET_SIZE = 2
+
 type Page struct {
-	nodeHeader       *NodeHeader
+	nodeHeader *NodeHeader
+
+	// TODO: Switch to a fix-sized array of objects, instead of a slice of pointers
+	// Do this to actually implement paging
 	cells            []*Cell
-	currentCellsSize uint32
+	nodeBody         [PAGE_SIZE - NODE_HEADER_SIZE]byte
+	currentCellsSize uint16
 }
 
 func NewPage() *Page {
@@ -31,13 +41,15 @@ func NewPage() *Page {
 }
 
 // NEXT STEP: implement internal node creation
-func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint32) *Page {
+func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *Page {
 	p := &Page{
 		nodeHeader: &NodeHeader{
-			nodeType: nodeType,
-			isRoot:   isRoot,
-			parent:   parent,
-			numCells: numCells,
+			nodeType:      nodeType,
+			isRoot:        isRoot,
+			parent:        parent,
+			numCells:      numCells,
+			totalBodySize: totalBodySize,
+			keySize:       KEY_SIZE,
 		},
 		// TODO: make use of the numCells parameter for more efficient cell addition
 		cells:            make([]*Cell, 0),
@@ -47,15 +59,36 @@ func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells u
 	return p
 }
 
-func (p *Page) findIndexForKey(key uint32) uint32 {
-	var leftIndex uint32 = 0
-	var rightIndex uint32 = p.nodeHeader.numCells
+func (p *Page) getOffset(ind uint16) uint16 {
+	return binary.LittleEndian.Uint16(p.nodeBody[ind*OFFSET_SIZE:])
+}
+
+func (p *Page) getStartOfCells() uint16 {
+	return p.nodeHeader.numCells * OFFSET_SIZE
+}
+
+func (p *Page) getKey(ind uint16) []byte {
+	cellStart := p.nodeBody[p.getStartOfCells()+p.getOffset(ind):]
+	return cellStart[:p.nodeHeader.keySize]
+}
+
+func (p *Page) getData(ind uint16) []byte {
+	cellStart := p.nodeBody[p.getStartOfCells()+p.getOffset(ind):]
+	dataSize := binary.LittleEndian.Uint16(cellStart[p.nodeHeader.keySize:])
+	return cellStart[p.nodeHeader.keySize+DATA_SIZE_SIZE : p.nodeHeader.keySize+DATA_SIZE_SIZE+dataSize]
+}
+
+func (p *Page) findIndexForKey2(key []byte) uint16 {
+	var leftIndex uint16 = 0
+	var rightIndex uint16 = p.nodeHeader.numCells
 	currentIndex := rightIndex / 2
 
 	for leftIndex < rightIndex {
-		if p.cells[currentIndex].key < key {
+		compareResult := bytes.Compare(p.getKey(currentIndex), key)
+
+		if compareResult == -1 {
 			leftIndex = currentIndex + 1
-		} else if p.cells[currentIndex].key > key {
+		} else if compareResult == 1 {
 			rightIndex = currentIndex
 		} else {
 			return currentIndex
@@ -67,48 +100,80 @@ func (p *Page) findIndexForKey(key uint32) uint32 {
 	return currentIndex
 }
 
-func (p *Page) insertDataAtIndex(index uint32, key uint32, data []byte) {
-	newCell := &Cell{
-		key:      key,
-		dataSize: uint32(len(data)),
-		data:     data,
-	}
+func (p *Page) insertDataAtIndex2(ind uint16, key []byte, data []byte) {
+	startOfCells := p.getStartOfCells()
+	keySize := p.nodeHeader.keySize
+	totalBodySize := p.nodeHeader.totalBodySize
+	dataLen16 := uint16(len(data))
+	lenIncrease := keySize + 2 + dataLen16
 
-	if index < p.nodeHeader.numCells {
-		lastCell := p.cells[p.nodeHeader.numCells-1]
-		for i := p.nodeHeader.numCells - 1; i > index; i-- {
-			p.cells[i] = p.cells[i-1]
+	offsets := make([]byte /*0,*/, (p.nodeHeader.numCells+1)*OFFSET_SIZE)
+	copy(offsets, p.nodeBody[:startOfCells])
+	cells := make([]byte /*0,*/, (totalBodySize-startOfCells)+lenIncrease)
+	copy(cells, p.nodeBody[startOfCells:totalBodySize])
+
+	/**
+	 * Update offsets list
+	 */
+	if ind < p.nodeHeader.numCells {
+		/**
+		 * Insert a new cell among the existing ones.
+		 */
+		nthOffset := binary.LittleEndian.Uint16(offsets[ind*OFFSET_SIZE:])
+		// make room for the new cell by shifting a part of the existing ones to the right
+		copy(cells[nthOffset+lenIncrease:], cells[nthOffset:totalBodySize-startOfCells])
+		// insert the cell key
+		copy(cells[nthOffset:nthOffset+keySize], key)
+		// insert the cell data size
+		dataLen16Bytes := make([]byte, 2)
+		binary.LittleEndian.PutUint16(dataLen16Bytes, dataLen16)
+		copy(cells[nthOffset+keySize:nthOffset+keySize+2], dataLen16Bytes)
+		// insert the cell data
+		copy(cells[nthOffset+keySize+2:nthOffset+keySize+2+dataLen16], data)
+
+		// Shift the necessary offsets to the right in the offsets list
+		for i := p.nodeHeader.numCells - 1; i >= ind; i-- {
+			// Get the old offset at index i
+			oldOffset := binary.LittleEndian.Uint16(offsets[i*OFFSET_SIZE:])
+			// Update the old index by adding new cell size
+			newOffset := oldOffset + uint16(lenIncrease)
+			newOffsetBytes := make([]byte, 2)
+			binary.LittleEndian.PutUint16(newOffsetBytes, newOffset)
+			// Insert the new offset and immediately shift it to the right
+			copy(offsets[(i+1)*OFFSET_SIZE:(i+2)*OFFSET_SIZE], newOffsetBytes)
 		}
-
-		p.cells[index] = newCell
-
-		p.cells = append(p.cells, lastCell)
 	} else {
-		p.cells = append(p.cells, newCell)
+		newOffsetBytes := make([]byte, 2)
+		binary.LittleEndian.PutUint16(newOffsetBytes, totalBodySize-startOfCells)
+		copy(offsets[p.nodeHeader.numCells*OFFSET_SIZE:], newOffsetBytes)
+		copy(cells[totalBodySize-startOfCells:], key)
+		dataLen16Bytes := make([]byte, 2)
+		binary.LittleEndian.PutUint16(dataLen16Bytes, dataLen16)
+		copy(cells[totalBodySize-startOfCells+keySize:], dataLen16Bytes)
+		copy(cells[totalBodySize-startOfCells+keySize+2:], data)
 	}
 
 	p.nodeHeader.numCells++
-	p.currentCellsSize += KEY_SIZE + DATA_SIZE_SIZE + uint32(len(data))
+	p.nodeHeader.totalBodySize += lenIncrease + OFFSET_SIZE
+	copy(p.nodeBody[:], offsets)
+	copy(p.nodeBody[p.nodeHeader.numCells*OFFSET_SIZE:], cells)
 
-	for _, c := range p.cells {
-		c.Print()
-	}
 }
 
 func (p *Page) transferCells(startIndSource int, destination *Page) {
 	destination.cells = append(destination.cells, p.cells[startIndSource:]...)
-	destination.nodeHeader.numCells = uint32(len(destination.cells))
+	destination.nodeHeader.numCells = uint16(len(destination.cells))
 	destination.calculateAndSetCurrentCellsSize()
 
 	p.cells = p.cells[:startIndSource]
-	p.nodeHeader.numCells = uint32(len(p.cells))
+	p.nodeHeader.numCells = uint16(len(p.cells))
 	p.calculateAndSetCurrentCellsSize()
 }
 
 func (p *Page) calculateAndSetCurrentCellsSize() {
-	var size uint32 = 0
+	var size uint16 = 0
 	for _, cell := range p.cells {
-		size += KEY_SIZE + DATA_SIZE_SIZE + uint32(len(cell.data))
+		size += KEY_SIZE + DATA_SIZE_SIZE + uint16(len(cell.data))
 	}
 
 	p.currentCellsSize = size
@@ -122,17 +187,14 @@ func (p *Page) getMaxKey() (bool, uint32) {
 	}
 }
 
-func (p *Page) hasSufficientSpaceTemp(newData []byte) bool {
-	if p.currentCellsSize+uint32(len(newData))+KEY_SIZE+DATA_SIZE_SIZE >= PAGE_SIZE {
-		return false
-	} else {
-		return true
-	}
+func (p *Page) hasSufficientSpace2(newData []byte) bool {
+	// TODO: check if there is enough space for new data
+	return true
 }
 
 func (p *Page) Print() {
 	p.nodeHeader.Print()
-	for i := 0; uint32(i) < p.nodeHeader.numCells; i++ {
+	for i := 0; uint16(i) < p.nodeHeader.numCells; i++ {
 		cell := p.cells[i]
 		fmt.Println("cell number", i, ": key =", cell.key)
 	}

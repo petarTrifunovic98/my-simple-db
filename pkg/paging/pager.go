@@ -1,7 +1,6 @@
 package paging
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 )
@@ -46,49 +45,48 @@ func NewPager(filename string) *Pager {
 
 	return pager
 }
-
-func (p *Pager) AddNewData(key uint32, data []byte) {
+func (p *Pager) AddNewData2(key []byte, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
-		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0, 0))
+		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0, 0, 0))
 	}
 
-	root := p.GetPageTemp(p.RootPage)
+	root := p.GetPage2(p.RootPage)
 	var pageToInsert *Page
 
-	if root.hasSufficientSpaceTemp(data) {
+	if root.hasSufficientSpace2(data) {
 		pageToInsert = root
 	} else {
 		// NEXT STEP: create a new root node
-		newPage := NewPageWithParams(LEAF_NODE, false, 0, 0)
+		// newPage := NewPageWithParams(LEAF_NODE, false, 0, 0)
 
-		// TODO: implement usage of old page index; don't just append in any case
-		p.Pages = append(p.Pages, newPage)
-		p.NumPages++
+		// // TODO: implement usage of old page index; don't just append in any case
+		// p.Pages = append(p.Pages, newPage)
+		// p.NumPages++
 
-		root.transferCells(int(root.nodeHeader.numCells)/2, newPage)
+		// root.transferCells(int(root.nodeHeader.numCells)/2, newPage)
 
-		if _, leftNodeMaxKey := root.getMaxKey(); key <= leftNodeMaxKey {
-			pageToInsert = root
-		} else {
-			pageToInsert = newPage
-		}
+		// if _, leftNodeMaxKey := root.getMaxKey(); key <= leftNodeMaxKey {
+		// 	pageToInsert = root
+		// } else {
+		// 	pageToInsert = newPage
+		// }
 	}
 
-	index := pageToInsert.findIndexForKey(key)
-	pageToInsert.insertDataAtIndex(index, key, data)
-	root.insertDataAtIndex(index, key, data)
+	index := pageToInsert.findIndexForKey2(key)
+	pageToInsert.insertDataAtIndex2(index, key, data)
 }
 
-func (p *Pager) ReadWholeCurrentPageTemp() []byte {
+func (p *Pager) ReadWholeCurrentPage2() []byte {
 	values2 := make([]byte, 0)
 	// var relevantLen uint32 = 0
 
 	var ind uint32
 	for ind = 0; ind < p.NumPages; ind++ {
-		currentPage := p.GetPageTemp(ind)
-		for _, cell := range currentPage.cells {
-			values2 = append(values2, cell.data...)
+		currentPage := p.GetPage2(ind)
+
+		for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
+			values2 = append(values2, currentPage.getData(uint16(i))...)
 		}
 
 		//values2 = append(values2, currentPage.data2[:]...)
@@ -101,31 +99,18 @@ func (p *Pager) ReadWholeCurrentPageTemp() []byte {
 	return values2
 }
 
-func (p *Pager) GetPageTemp(ind uint32) *Page {
+func (p *Pager) GetPage2(ind uint32) *Page {
 	if ind < p.NumPages {
 		if p.Pages[ind] == nil {
 			tempBytes := make([]byte, PAGE_SIZE)
 			p.File.ReadAt(tempBytes, int64(PAGE_SIZE*ind))
 			nodeHeader := &NodeHeader{}
 			nodeHeader.Deserialize(tempBytes)
-			cellBytes := tempBytes[NODE_HEADER_SIZE:]
-			currentIndex := 0
+			nodeBodyBytes := tempBytes[NODE_HEADER_SIZE:]
 
-			p.Pages[ind] = NewPageWithParams(LEAF_NODE, true, nodeHeader.parent, nodeHeader.numCells)
+			p.Pages[ind] = NewPageWithParams(LEAF_NODE, true, nodeHeader.parent, nodeHeader.numCells, nodeHeader.totalBodySize)
 
-			for i := 0; uint32(i) < nodeHeader.numCells; i++ {
-				key := binary.LittleEndian.Uint32(cellBytes[currentIndex : currentIndex+4])
-				currentIndex += 4
-				dataSize := binary.LittleEndian.Uint32(cellBytes[currentIndex : currentIndex+4])
-				currentIndex += 4
-				data := cellBytes[currentIndex : currentIndex+int(dataSize)]
-				currentIndex += int(dataSize)
-				p.Pages[ind].cells = append(p.Pages[ind].cells, &Cell{
-					data:     data,
-					dataSize: dataSize,
-					key:      key,
-				})
-			}
+			copy(p.Pages[ind].nodeBody[:], nodeBodyBytes)
 		}
 	} else {
 		newPages := make([]*Page, ind-p.NumPages+1)
@@ -136,26 +121,13 @@ func (p *Pager) GetPageTemp(ind uint32) *Page {
 	return p.Pages[ind]
 }
 
-func (p *Pager) ClearPagerTemp() {
+func (p *Pager) ClearPager2() {
 	for _, page := range p.Pages {
-		pageBytes := make([]byte, 0, PAGE_SIZE)
+		pageBytes := make([]byte, PAGE_SIZE)
 		nodeBytes := page.nodeHeader.Serialize()
-		pageBytes = append(pageBytes, nodeBytes...)
+		copy(pageBytes, nodeBytes)
 
-		for _, cell := range page.cells {
-			keyBytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(keyBytes, cell.key)
-			pageBytes = append(pageBytes, keyBytes...)
-
-			dataSizeBytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(dataSizeBytes, cell.dataSize)
-			pageBytes = append(pageBytes, dataSizeBytes...)
-
-			pageBytes = append(pageBytes, cell.data...)
-		}
-
-		additionalBytes := make([]byte, PAGE_SIZE-len(pageBytes))
-		pageBytes = append(pageBytes, additionalBytes...)
+		copy(pageBytes[NODE_HEADER_SIZE:], page.nodeBody[:])
 
 		n, _ := p.File.Write(pageBytes)
 		fmt.Println("Written", n, "bytes for the page")
@@ -167,7 +139,7 @@ func (p *Pager) ClearPagerTemp() {
 func (p *Pager) PrintPages() {
 	for ind, page := range p.Pages {
 		if page == nil {
-			page = p.GetPageTemp(uint32(ind))
+			page = p.GetPage2(uint32(ind))
 		}
 		page.Print()
 	}

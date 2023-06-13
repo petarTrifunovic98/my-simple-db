@@ -26,7 +26,7 @@ type NonStatementExit struct {
 
 func (ns *NonStatementExit) Execute(t *table.Table) CommandExecutionStatusCode {
 	ns.code = SUCCESS
-	t.DestroyTable()
+	t.DestroyTable2()
 	os.Exit(0)
 	return ns.code
 }
