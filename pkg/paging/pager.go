@@ -45,16 +45,16 @@ func NewPager(filename string) *Pager {
 
 	return pager
 }
-func (p *Pager) AddNewData2(key []byte, data []byte) {
+func (p *Pager) AddNewData(key []byte, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
 		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0, 0, 0))
 	}
 
-	root := p.GetPage2(p.RootPage)
+	root := p.GetPage(p.RootPage)
 	var pageToInsert *Page
 
-	if root.hasSufficientSpace2(data) {
+	if root.hasSufficientSpace(data) {
 		pageToInsert = root
 	} else {
 		// NEXT STEP: create a new root node
@@ -73,17 +73,17 @@ func (p *Pager) AddNewData2(key []byte, data []byte) {
 		// }
 	}
 
-	index := pageToInsert.findIndexForKey2(key)
-	pageToInsert.insertDataAtIndex2(index, key, data)
+	index := pageToInsert.findIndexForKey(key)
+	pageToInsert.insertDataAtIndex(index, key, data)
 }
 
-func (p *Pager) ReadWholeCurrentPage2() []byte {
+func (p *Pager) ReadWholeCurrentPage() []byte {
 	values2 := make([]byte, 0)
 	// var relevantLen uint32 = 0
 
 	var ind uint32
 	for ind = 0; ind < p.NumPages; ind++ {
-		currentPage := p.GetPage2(ind)
+		currentPage := p.GetPage(ind)
 
 		for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
 			values2 = append(values2, currentPage.getData(uint16(i))...)
@@ -99,7 +99,7 @@ func (p *Pager) ReadWholeCurrentPage2() []byte {
 	return values2
 }
 
-func (p *Pager) GetPage2(ind uint32) *Page {
+func (p *Pager) GetPage(ind uint32) *Page {
 	if ind < p.NumPages {
 		if p.Pages[ind] == nil {
 			tempBytes := make([]byte, PAGE_SIZE)
@@ -121,7 +121,7 @@ func (p *Pager) GetPage2(ind uint32) *Page {
 	return p.Pages[ind]
 }
 
-func (p *Pager) ClearPager2() {
+func (p *Pager) ClearPager() {
 	for _, page := range p.Pages {
 		pageBytes := make([]byte, PAGE_SIZE)
 		nodeBytes := page.nodeHeader.Serialize()
@@ -139,7 +139,7 @@ func (p *Pager) ClearPager2() {
 func (p *Pager) PrintPages() {
 	for ind, page := range p.Pages {
 		if page == nil {
-			page = p.GetPage2(uint32(ind))
+			page = p.GetPage(uint32(ind))
 		}
 		page.Print()
 	}

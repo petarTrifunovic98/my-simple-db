@@ -15,7 +15,7 @@ const prompt string = "my-db> "
 func main() {
 
 	t := table.NewTable()
-	defer t.DestroyTable2()
+	defer t.DestroyTable()
 	fmt.Println("~ Started my db... ")
 
 	for {

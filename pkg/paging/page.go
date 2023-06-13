@@ -78,7 +78,7 @@ func (p *Page) getData(ind uint16) []byte {
 	return cellStart[p.nodeHeader.keySize+DATA_SIZE_SIZE : p.nodeHeader.keySize+DATA_SIZE_SIZE+dataSize]
 }
 
-func (p *Page) findIndexForKey2(key []byte) uint16 {
+func (p *Page) findIndexForKey(key []byte) uint16 {
 	var leftIndex uint16 = 0
 	var rightIndex uint16 = p.nodeHeader.numCells
 	currentIndex := rightIndex / 2
@@ -100,7 +100,7 @@ func (p *Page) findIndexForKey2(key []byte) uint16 {
 	return currentIndex
 }
 
-func (p *Page) insertDataAtIndex2(ind uint16, key []byte, data []byte) {
+func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
 	startOfCells := p.getStartOfCells()
 	keySize := p.nodeHeader.keySize
 	totalBodySize := p.nodeHeader.totalBodySize
@@ -187,7 +187,7 @@ func (p *Page) getMaxKey() (bool, uint32) {
 	}
 }
 
-func (p *Page) hasSufficientSpace2(newData []byte) bool {
+func (p *Page) hasSufficientSpace(newData []byte) bool {
 	// TODO: check if there is enough space for new data
 	return true
 }
