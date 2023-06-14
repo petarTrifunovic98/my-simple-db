@@ -46,6 +46,20 @@ func NewPager(filename string) *Pager {
 
 	return pager
 }
+
+func (p *Pager) getNextPageInd() uint32 {
+	return p.NumPages
+}
+
+func (p *Pager) insertNewPage(page *Page, ind uint32) {
+	if ind == p.NumPages {
+		p.Pages = append(p.Pages, page)
+	} else {
+		p.Pages[ind] = page
+	}
+	p.NumPages++
+}
+
 func (p *Pager) AddNewData(key []byte, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
@@ -69,12 +83,15 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 		newPage := NewPageWithParams(LEAF_NODE, false, 0, 0, 0)
 		newRoot := NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
 
-		p.Pages = append(p.Pages, newPage, newRoot)
-		p.NumPages += 2
+		newRightChildInd := p.getNextPageInd()
+		p.insertNewPage(newPage, newRightChildInd)
+		newLeftChildInd := p.getNextPageInd()
+		p.insertNewPage(newRoot, newLeftChildInd)
+
 		// Make sure that the root is always th first page, for easier persistance to disk
 		p.Pages[0] = newRoot
-		p.Pages[2] = root
-		root.transferCells(0, 2, 1, newRoot, newPage)
+		p.Pages[newLeftChildInd] = root
+		root.transferCells(0, newLeftChildInd, newRightChildInd, newRoot, newPage)
 
 		// Currently, new root can have only one value, created when splitting the old root
 		rootKey := newRoot.getKeyInternal(0)
@@ -176,7 +193,7 @@ func (p *Pager) GetPage(ind uint32) *Page {
 }
 
 func (p *Pager) ClearPager() {
-	for _, page := range p.Pages {
+	for ind, page := range p.Pages {
 		if page != nil {
 			pageBytes := make([]byte, PAGE_SIZE)
 			nodeBytes := page.nodeHeader.Serialize()
@@ -184,7 +201,8 @@ func (p *Pager) ClearPager() {
 
 			copy(pageBytes[NODE_HEADER_SIZE:], page.nodeBody[:])
 
-			n, _ := p.File.Write(pageBytes)
+			// n, _ := p.File.Write(pageBytes)
+			n, _ := p.File.WriteAt(pageBytes, int64(ind*PAGE_SIZE))
 			fmt.Println("Written", n, "bytes for the page")
 		}
 	}
