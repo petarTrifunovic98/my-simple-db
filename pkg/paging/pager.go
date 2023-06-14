@@ -71,11 +71,13 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 
 		p.Pages = append(p.Pages, newPage, newRoot)
 		p.NumPages += 2
-		p.RootPage = 2
-		root.transferCells(0, 2, newRoot, newPage)
+		// Make sure that the root is always th first page, for easier persistance to disk
+		p.Pages[0] = newRoot
+		p.Pages[2] = root
+		root.transferCells(0, 2, 1, newRoot, newPage)
 
 		// Currently, new root can have only one value, created when splitting the old root
-		rootKey := newRoot.getKey(0)
+		rootKey := newRoot.getKeyInternal(0)
 
 		/**
 		 * Compare the root key and the key of new data,
@@ -101,15 +103,16 @@ func (p *Pager) ReadAllPages() []byte {
 	 * for a tree with a root node which has only
 	 * two children.
 	 */
-	values := p.ReadPageAtInd(0)
-	if p.RootPage == 2 {
+	if p.NumPages > 1 {
+		values := p.ReadPageAtInd(2)
 		fmt.Println("Reading from more than one page...")
-		values = append(values, p.ReadPageAtInd(2)...)
 		values = append(values, p.ReadPageAtInd(1)...)
+		fmt.Println("Values len:", len(values))
+		return values
+	} else {
+		return p.ReadPageAtInd(0)
 	}
 
-	fmt.Println("Values len:", len(values))
-	return values
 }
 
 func (p *Pager) ReadPageAtInd(ind uint32) []byte {

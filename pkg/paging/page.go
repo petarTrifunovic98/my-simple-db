@@ -10,7 +10,7 @@ const KEY_SIZE uint16 = 4
 const DATA_SIZE_SIZE uint16 = 2
 
 /**
- * Node body outline:
+ * Leaf node body outline:
  * - first a list of offsets; each offset is 2 bytes; each value represents
  *	the offset from the beginning of the list of cells
  * - after offset list, a list of cells; each cell consists of a key of size
@@ -19,6 +19,18 @@ const DATA_SIZE_SIZE uint16 = 2
  * |    offset list		|                            cells list                                |
  * |--------------------|----------------------------------------------------------------------|
  * |number of cells * 2B|key (keysize*1B), data size (DATA_SIZE_SIZE*1b), data (data size * 1B)|
+ */
+
+/**
+ * Internal node body outline:
+ * - a list of pointers and keys
+ * - first, there is a pointer to the leftmost child
+ * - after that, a list of cells is actually a list of key-pointer pairs
+ * - numCells in the header actually says what the number of keys is
+ * - number of pointers is always numCells+1
+ * - each key is of keysize size
+ * - each child pointer is 32B
+ * | leftmost child pointer | key | child pointer | key | child pointer |...
  */
 
 const OFFSET_SIZE = 2
@@ -67,6 +79,11 @@ func (p *Page) getData(ind uint16) []byte {
 	cellStart := p.nodeBody[p.getStartOfCells()+p.getOffset(ind):]
 	dataSize := binary.LittleEndian.Uint16(cellStart[p.nodeHeader.keySize:])
 	return cellStart[p.nodeHeader.keySize+DATA_SIZE_SIZE : p.nodeHeader.keySize+DATA_SIZE_SIZE+dataSize]
+}
+
+// Change to a less hard-coded variant
+func (p *Page) getKeyInternal(ind uint16) []byte {
+	return p.nodeBody[4+ind*(4+p.nodeHeader.keySize) : 4+ind*(4+p.nodeHeader.keySize)+p.nodeHeader.keySize]
 }
 
 func (p *Page) findIndexForKey(key []byte) uint16 {
@@ -160,13 +177,11 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
  * Should be updated to:
  *  - work with any leaf node
  */
-func (p *Page) transferCells(startIndSource int, newParentInd uint32, newParent *Page, destination *Page) {
+func (p *Page) transferCells(newParentInd uint32, leftChildInd uint32, rightChildInd uint32, newParent *Page, destination *Page) {
 
-	// find the offset of the middle element
+	// find the offset and the key of the middle element
 	middleElementOffset := p.getOffset(p.nodeHeader.numCells / 2)
-
-	// find the offset of the element next to the middle one (right neighbour)
-	nextToMiddleElementOffset := p.getOffset(p.nodeHeader.numCells/2 + 1)
+	middleElementKey := p.getKey(p.nodeHeader.numCells / 2)
 
 	// preserve old values from the "p" page
 	oldStartOfCells := p.getStartOfCells()
@@ -178,13 +193,17 @@ func (p *Page) transferCells(startIndSource int, newParentInd uint32, newParent 
 	 * of elements
 	 */
 	newParent.nodeHeader.numCells++
-	destination.nodeHeader.numCells = (p.nodeHeader.numCells - 1) / 2
+	destination.nodeHeader.numCells = (p.nodeHeader.numCells + 1) / 2
 	p.nodeHeader.numCells /= 2
 
-	// update total body size according to new elements added to each page
-	newParent.nodeHeader.totalBodySize += OFFSET_SIZE + (nextToMiddleElementOffset - middleElementOffset)
+	/**
+	 * update total body size according to new elements added to each page
+	 */
+	// Size of parent increases by one key size and two pointer sizes (for now)
+	// TODO: change 2*4 to 2*CHILD_POINTER_SIZE
+	newParent.nodeHeader.totalBodySize += 2*4 + p.nodeHeader.keySize
 	destination.nodeHeader.totalBodySize =
-		destination.nodeHeader.numCells*OFFSET_SIZE + (p.nodeHeader.totalBodySize - oldStartOfCells - nextToMiddleElementOffset)
+		destination.nodeHeader.numCells*OFFSET_SIZE + (p.nodeHeader.totalBodySize - oldStartOfCells - middleElementOffset)
 	p.nodeHeader.totalBodySize = p.nodeHeader.numCells*OFFSET_SIZE + middleElementOffset
 
 	p.nodeHeader.isRoot = false
@@ -192,24 +211,24 @@ func (p *Page) transferCells(startIndSource int, newParentInd uint32, newParent 
 	destination.nodeHeader.parent = newParentInd
 
 	/**
-	 * Update the offsets list of new parent and new child
+	 * Update the parent and the new child's offset list
 	 */
-	// redundant, but serves for logical purposes
-	copy(newParent.nodeBody[:], []byte{0, 0})
+	// put children pointers and copy middle element key to the new parent
+	binary.LittleEndian.PutUint32(newParent.nodeBody[:], leftChildInd)
+	copy(newParent.nodeBody[4:], middleElementKey)
+	binary.LittleEndian.PutUint32(newParent.nodeBody[4+p.nodeHeader.keySize:], rightChildInd)
 	// move offsets from the existing child to the new one, updating them in the process
 	for i := uint16(0); i < destination.nodeHeader.numCells; i++ {
-		offset := p.getOffset(p.nodeHeader.numCells + 1 + i)
-		offset -= nextToMiddleElementOffset
+		offset := p.getOffset(p.nodeHeader.numCells + i)
+		offset -= middleElementOffset
 		binary.LittleEndian.PutUint16(destination.nodeBody[i*OFFSET_SIZE:], offset)
 	}
 
 	/**
 	 * Transfer data to new pages
 	 */
-	copy(newParent.nodeBody[OFFSET_SIZE:],
-		p.nodeBody[oldStartOfCells+middleElementOffset:oldStartOfCells+nextToMiddleElementOffset])
 	copy(destination.nodeBody[destination.nodeHeader.numCells*OFFSET_SIZE:],
-		p.nodeBody[oldStartOfCells+nextToMiddleElementOffset:oldTotalBodySize])
+		p.nodeBody[oldStartOfCells+middleElementOffset:oldTotalBodySize])
 	// for the existing node, just shift data left, since the number of offsets is decreased
 	copy(p.nodeBody[p.nodeHeader.numCells*OFFSET_SIZE:], p.nodeBody[oldStartOfCells:p.nodeHeader.totalBodySize])
 }
