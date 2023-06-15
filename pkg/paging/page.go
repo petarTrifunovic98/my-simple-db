@@ -86,6 +86,33 @@ func (p *Page) getKeyInternal(ind uint16) []byte {
 	return p.nodeBody[4+ind*(4+p.nodeHeader.keySize) : 4+ind*(4+p.nodeHeader.keySize)+p.nodeHeader.keySize]
 }
 
+func (p *Page) getPointerInternal(ind uint16) uint32 {
+	pointerBytes := p.nodeBody[ind*(4+p.nodeHeader.keySize) : ind*(4+p.nodeHeader.keySize)+4]
+	return binary.LittleEndian.Uint32(pointerBytes)
+}
+
+func (p *Page) findIndexForKeyInternal(key []byte) uint16 {
+	var leftIndex uint16 = 0
+	var rightIndex uint16 = p.nodeHeader.numCells
+	currentIndex := rightIndex / 2
+
+	for leftIndex < rightIndex {
+		compareResult := bytes.Compare(p.getKeyInternal(currentIndex), key)
+
+		if compareResult == -1 {
+			leftIndex = currentIndex + 1
+		} else if compareResult == 1 {
+			rightIndex = currentIndex
+		} else {
+			return currentIndex
+		}
+
+		currentIndex = (leftIndex + rightIndex) / 2
+	}
+
+	return currentIndex
+}
+
 func (p *Page) findIndexForKey(key []byte) uint16 {
 	var leftIndex uint16 = 0
 	var rightIndex uint16 = p.nodeHeader.numCells
@@ -232,21 +259,6 @@ func (p *Page) transferCells(newParentInd uint32, leftChildInd uint32, rightChil
 	// for the existing node, just shift data left, since the number of offsets is decreased
 	copy(p.nodeBody[p.nodeHeader.numCells*OFFSET_SIZE:], p.nodeBody[oldStartOfCells:p.nodeHeader.totalBodySize])
 }
-
-// func (p *Page) calculateAndSetCurrentCellsSize() {
-// 	var size uint16 = 0
-// 	for _, cell := range p.cells {
-// 		size += KEY_SIZE + DATA_SIZE_SIZE + uint16(len(cell.data))
-// 	}
-// }
-
-// func (p *Page) getMaxKey() (bool, uint32) {
-// 	if p.nodeHeader.numCells <= 0 {
-// 		return false, 0
-// 	} else {
-// 		return true, p.cells[p.nodeHeader.numCells-1].key
-// 	}
-// }
 
 func (p *Page) hasSufficientSpace(newData []byte) bool {
 	// TODO: check if there is enough space for new data
