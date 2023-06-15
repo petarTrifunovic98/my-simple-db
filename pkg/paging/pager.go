@@ -60,24 +60,33 @@ func (p *Pager) insertNewPage(page *Page, ind uint32) {
 	p.NumPages++
 }
 
+func (p *Pager) findNodeToInsert(currentPageInd uint32, key []byte) uint32 {
+	currentPage := p.GetPage(currentPageInd)
+	if currentPage.nodeHeader.nodeType != LEAF_NODE {
+		nextPageInd := currentPage.getPointerInternal(currentPage.findIndexForKeyInternal(key))
+		return p.findNodeToInsert(nextPageInd, key)
+	} else {
+		return currentPageInd
+	}
+}
+
 func (p *Pager) AddNewData(key []byte, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
 		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0, 0, 0))
 	}
 
-	root := p.GetPage(p.RootPage)
-	var pageToInsert *Page
+	// root := p.GetPage(p.RootPage)
+	// var pageToInsert *Page
 
-	if root.hasSufficientSpace(data) {
-		pageToInsert = root
-	} else {
+	pageToInsertInd := p.findNodeToInsert(0, key)
+	pageToInsert := p.GetPage(pageToInsertInd)
+
+	if !pageToInsert.hasSufficientSpace(data) {
 		/**
 		 * This executes when root is full, in order to split it.
 		 * Currently works only when root was leaf, and should now
 		 * be split into two children with new root.
-		 * Parts are hard coded, such as the index of RootPage,
-		 * or the parameter "2" in the transferCells function.
 		 * TODO: Remove hard coded parts
 		 */
 		newPage := NewPageWithParams(LEAF_NODE, false, 0, 0, 0)
@@ -88,10 +97,10 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 		newLeftChildInd := p.getNextPageInd()
 		p.insertNewPage(newRoot, newLeftChildInd)
 
-		// Make sure that the root is always th first page, for easier persistance to disk
+		// Make sure that the root is always the first page, for easier persistance to disk
 		p.Pages[0] = newRoot
-		p.Pages[newLeftChildInd] = root
-		root.transferCells(0, newLeftChildInd, newRightChildInd, newRoot, newPage)
+		p.Pages[newLeftChildInd] = pageToInsert
+		pageToInsert.transferCells(0, newLeftChildInd, newRightChildInd, newRoot, newPage)
 
 		// Currently, new root can have only one value, created when splitting the old root
 		rootKey := newRoot.getKeyInternal(0)
@@ -104,8 +113,6 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 		compareResult := bytes.Compare(rootKey, key)
 		if compareResult == -1 {
 			pageToInsert = newPage
-		} else {
-			pageToInsert = root
 		}
 	}
 
@@ -179,7 +186,13 @@ func (p *Pager) GetPage(ind uint32) *Page {
 			nodeHeader.Deserialize(tempBytes)
 			nodeBodyBytes := tempBytes[NODE_HEADER_SIZE:]
 
-			p.Pages[ind] = NewPageWithParams(LEAF_NODE, true, nodeHeader.parent, nodeHeader.numCells, nodeHeader.totalBodySize)
+			p.Pages[ind] = NewPageWithParams(
+				nodeHeader.nodeType,
+				true,
+				nodeHeader.parent,
+				nodeHeader.numCells,
+				nodeHeader.totalBodySize,
+			)
 
 			copy(p.Pages[ind].nodeBody[:], nodeBodyBytes)
 		}
