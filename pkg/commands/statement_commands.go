@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/petarTrifunovic98/my-simple-db/pkg/paging"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/row"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/serialization"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
@@ -34,34 +33,16 @@ func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 		return s.code
 	}
 
-	i := 0
+	b := bytes.NewBuffer(values)
 	for {
-		startIndex := i * paging.PAGE_SIZE
-		if startIndex >= len(values) {
-			return s.code
+		r := &row.Row{}
+		err := serialization.Deserialize(b, r)
+		if err != nil {
+			break
 		}
-
-		endIndex := (i + 1) * paging.PAGE_SIZE
-
-		var b *bytes.Buffer
-
-		if endIndex >= len(values) {
-			b = bytes.NewBuffer(values[startIndex:])
-		} else {
-			b = bytes.NewBuffer(values[startIndex:endIndex])
-		}
-
-		for {
-			r := &row.Row{}
-			err := serialization.Deserialize(b, r)
-			if err != nil {
-				break
-			}
-			r.Print()
-		}
-
-		i++
+		r.Print()
 	}
+	return s.code
 }
 
 func (s *StatementSelect) PrintPreExecution() {
