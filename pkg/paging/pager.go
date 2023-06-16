@@ -90,27 +90,38 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 		 * TODO: Remove hard coded parts
 		 */
 		newPage := NewPageWithParams(LEAF_NODE, false, 0, 0, 0)
-		newRoot := NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
+		var parent *Page
+		var parentInd uint32
+		if pageToInsert.nodeHeader.isRoot {
+			parent = NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
+			parentInd := p.getNextPageInd()
+			p.insertNewPage(parent, parentInd)
+		} else {
+			parentInd = pageToInsert.nodeHeader.parent
+			parent = p.GetPage(parentInd)
+		}
 
 		newRightChildInd := p.getNextPageInd()
 		p.insertNewPage(newPage, newRightChildInd)
-		newLeftChildInd := p.getNextPageInd()
-		p.insertNewPage(newRoot, newLeftChildInd)
 
-		// Make sure that the root is always the first page, for easier persistance to disk
-		p.Pages[0] = newRoot
-		p.Pages[newLeftChildInd] = pageToInsert
-		pageToInsert.transferCells(0, newLeftChildInd, newRightChildInd, newRoot, newPage)
+		if pageToInsert.nodeHeader.isRoot {
+			// Make sure that the root is always the first page, for easier persistance to disk
+			p.Pages[0] = parent
+			p.Pages[parentInd] = pageToInsert
+			pageToInsert.transferCells(0, parentInd, newRightChildInd, parent, newPage)
+		} else {
+			pageToInsert.transferCellsNotRoot(parentInd, pageToInsertInd, newRightChildInd, parent, newPage)
+		}
 
 		// Currently, new root can have only one value, created when splitting the old root
-		rootKey := newRoot.getKeyInternal(0)
+		parentKey := parent.getKeyInternal(0)
 
 		/**
 		 * Compare the root key and the key of new data,
 		 * in order to decide which child gets the new element.
 		 * Should be implemented as recursive search through nodes.
 		 */
-		compareResult := bytes.Compare(rootKey, key)
+		compareResult := bytes.Compare(parentKey, key)
 		if compareResult == -1 {
 			pageToInsert = newPage
 		}
@@ -188,7 +199,7 @@ func (p *Pager) GetPage(ind uint32) *Page {
 
 			p.Pages[ind] = NewPageWithParams(
 				nodeHeader.nodeType,
-				true,
+				nodeHeader.isRoot,
 				nodeHeader.parent,
 				nodeHeader.numCells,
 				nodeHeader.totalBodySize,

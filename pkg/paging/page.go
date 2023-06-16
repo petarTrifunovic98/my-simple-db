@@ -82,6 +82,10 @@ func (p *Page) getData(ind uint16) []byte {
 }
 
 // Change to a less hard-coded variant
+func (p *Page) getOffsetInternal(ind uint16) uint16 {
+	return ind * (4 + p.nodeHeader.keySize)
+}
+
 func (p *Page) getKeyInternal(ind uint16) []byte {
 	return p.nodeBody[4+ind*(4+p.nodeHeader.keySize) : 4+ind*(4+p.nodeHeader.keySize)+p.nodeHeader.keySize]
 }
@@ -204,7 +208,76 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
  * Should be updated to:
  *  - work with any leaf node
  */
-func (p *Page) transferCells(newParentInd uint32, leftChildInd uint32, rightChildInd uint32, newParent *Page, destination *Page) {
+func (p *Page) transferCellsNotRoot(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent *Page, destination *Page) {
+
+	// find the offset and the key of the middle element
+	middleElementOffset := p.getOffset(p.nodeHeader.numCells / 2)
+	middleElementKey := p.getKey(p.nodeHeader.numCells / 2)
+
+	// preserve old values from the "p" page
+	oldStartOfCells := p.getStartOfCells()
+	oldTotalBodySize := p.nodeHeader.totalBodySize
+
+	/**
+	 * update number of cells; newParent gets one new element,
+	 * while children are left with half of the previous number
+	 * of elements
+	 */
+	destination.nodeHeader.numCells = (p.nodeHeader.numCells + 1) / 2
+	p.nodeHeader.numCells /= 2
+
+	/**
+	 * update total body size according to new elements added to each page
+	 */
+	// Size of parent increases by one key size and two pointer sizes (for now)
+	// TODO: change 2*4 to 2*CHILD_POINTER_SIZE
+	destination.nodeHeader.totalBodySize =
+		destination.nodeHeader.numCells*OFFSET_SIZE + (p.nodeHeader.totalBodySize - oldStartOfCells - middleElementOffset)
+	p.nodeHeader.totalBodySize = p.nodeHeader.numCells*OFFSET_SIZE + middleElementOffset
+
+	p.nodeHeader.isRoot = false
+	p.nodeHeader.parent = newParentInd
+	destination.nodeHeader.parent = newParentInd
+
+	indForKey := newParent.findIndexForKeyInternal(middleElementKey)
+	pointerOffset := p.getOffsetInternal(indForKey)
+
+	/**
+	 * Update the parent and the new child's offset list
+	 */
+	// put children pointers and copy middle element key to the new parent
+	copy(newParent.nodeBody[pointerOffset+2*4+p.nodeHeader.keySize:],
+		newParent.nodeBody[pointerOffset+4:newParent.nodeHeader.totalBodySize])
+	copy(newParent.nodeBody[pointerOffset+4:], middleElementKey)
+	binary.LittleEndian.PutUint32(newParent.nodeBody[4+p.nodeHeader.keySize:], newChildInd)
+	newParent.nodeHeader.numCells++
+	newParent.nodeHeader.totalBodySize += 4 + p.nodeHeader.keySize
+	// move offsets from the existing child to the new one, updating them in the process
+	for i := uint16(0); i < destination.nodeHeader.numCells; i++ {
+		offset := p.getOffset(p.nodeHeader.numCells + i)
+		offset -= middleElementOffset
+		binary.LittleEndian.PutUint16(destination.nodeBody[i*OFFSET_SIZE:], offset)
+	}
+
+	/**
+	 * Transfer data to new pages
+	 */
+	copy(destination.nodeBody[destination.nodeHeader.numCells*OFFSET_SIZE:],
+		p.nodeBody[oldStartOfCells+middleElementOffset:oldTotalBodySize])
+	// for the existing node, just shift data left, since the number of offsets is decreased
+	copy(p.nodeBody[p.nodeHeader.numCells*OFFSET_SIZE:], p.nodeBody[oldStartOfCells:p.nodeHeader.totalBodySize])
+}
+
+/**
+ * Currently:
+ *  - splits the page "p", sends the middle element to "newParent"
+ *  and sends all elements greater than the middle one to "destination"
+ *  - works only for splitting a leaf node which was previously root, thus
+ *  making the "newParent" page the node root
+ * Should be updated to:
+ *  - work with any leaf node
+ */
+func (p *Page) transferCells(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent *Page, destination *Page) {
 
 	// find the offset and the key of the middle element
 	middleElementOffset := p.getOffset(p.nodeHeader.numCells / 2)
@@ -241,9 +314,9 @@ func (p *Page) transferCells(newParentInd uint32, leftChildInd uint32, rightChil
 	 * Update the parent and the new child's offset list
 	 */
 	// put children pointers and copy middle element key to the new parent
-	binary.LittleEndian.PutUint32(newParent.nodeBody[:], leftChildInd)
+	binary.LittleEndian.PutUint32(newParent.nodeBody[:], oldChildInd)
 	copy(newParent.nodeBody[4:], middleElementKey)
-	binary.LittleEndian.PutUint32(newParent.nodeBody[4+p.nodeHeader.keySize:], rightChildInd)
+	binary.LittleEndian.PutUint32(newParent.nodeBody[4+p.nodeHeader.keySize:], newChildInd)
 	// move offsets from the existing child to the new one, updating them in the process
 	for i := uint16(0); i < destination.nodeHeader.numCells; i++ {
 		offset := p.getOffset(p.nodeHeader.numCells + i)
