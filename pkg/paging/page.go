@@ -246,12 +246,12 @@ func (p *Page) transferCellsNotRoot(newParentInd uint32, oldChildInd uint32, new
 	 * Update the parent and the new child's offset list
 	 */
 	// put children pointers and copy middle element key to the new parent
+	newParent.nodeHeader.totalBodySize += 4 + p.nodeHeader.keySize
 	copy(newParent.nodeBody[pointerOffset+2*4+p.nodeHeader.keySize:],
 		newParent.nodeBody[pointerOffset+4:newParent.nodeHeader.totalBodySize])
 	copy(newParent.nodeBody[pointerOffset+4:], middleElementKey)
-	binary.LittleEndian.PutUint32(newParent.nodeBody[4+p.nodeHeader.keySize:], newChildInd)
+	binary.LittleEndian.PutUint32(newParent.nodeBody[pointerOffset+4+p.nodeHeader.keySize:], newChildInd)
 	newParent.nodeHeader.numCells++
-	newParent.nodeHeader.totalBodySize += 4 + p.nodeHeader.keySize
 	// move offsets from the existing child to the new one, updating them in the process
 	for i := uint16(0); i < destination.nodeHeader.numCells; i++ {
 		offset := p.getOffset(p.nodeHeader.numCells + i)
