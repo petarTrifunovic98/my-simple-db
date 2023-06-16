@@ -113,15 +113,15 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 			pageToInsert.transferCellsNotRoot(parentInd, pageToInsertInd, newRightChildInd, parent, newPage)
 		}
 
-		// Currently, new root can have only one value, created when splitting the old root
-		parentKey := parent.getKeyInternal(0)
+		// The leftmost key in the right child decides which child the new key belongs to
+		decisionKey := newPage.getKey(0)
 
 		/**
-		 * Compare the root key and the key of new data,
+		 * Compare the decision key and the key of new data,
 		 * in order to decide which child gets the new element.
 		 * Should be implemented as recursive search through nodes.
 		 */
-		compareResult := bytes.Compare(parentKey, key)
+		compareResult := bytes.Compare(decisionKey, key)
 		if compareResult == -1 {
 			pageToInsert = newPage
 		}
@@ -134,20 +134,23 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 func (p *Pager) ReadAllPages() []byte {
 	/**
 	 * Reads all the pages in a sorted order.
-	 * Sorting is currently hard coded and works only
-	 * for a tree with a root node which has only
-	 * two children.
 	 */
-	if p.NumPages > 1 {
-		values := p.ReadPageAtInd(2)
-		fmt.Println("Reading from more than one page...")
-		values = append(values, p.ReadPageAtInd(1)...)
-		fmt.Println("Values len:", len(values))
-		return values
-	} else {
-		return p.ReadPageAtInd(0)
-	}
+	values := make([]byte, 0, p.NumPages*PAGE_SIZE)
+	p.ReadPageAtIndRec(0, &values)
+	return values
+}
 
+func (p *Pager) ReadPageAtIndRec(ind uint32, values *[]byte) {
+	currentPage := p.GetPage(ind)
+	if currentPage.nodeHeader.nodeType == LEAF_NODE {
+		for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
+			*values = append(*values, currentPage.getData(uint16(i))...)
+		}
+	} else {
+		for i := 0; i <= int(currentPage.nodeHeader.numCells); i++ {
+			p.ReadPageAtIndRec(currentPage.getPointerInternal(uint16(i)), values)
+		}
+	}
 }
 
 func (p *Pager) ReadPageAtInd(ind uint32) []byte {
