@@ -92,6 +92,7 @@ func (p *Pager) findNodeToInsert(currentPageInd uint32, key []byte) uint32 {
 				currentPage.transferCellsInternalNotRoot(parentInd, currentPageInd, newRightChildInd, parent, newPage)
 			}
 
+			p.updateParentOfChildren(newRightChildInd)
 			currentPage = parent
 		}
 
@@ -126,7 +127,7 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 		var parentInd uint32
 		if pageToInsert.nodeHeader.isRoot {
 			parent = NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
-			parentInd := p.getNextPageInd()
+			parentInd = p.getNextPageInd()
 			p.insertNewPage(parent, parentInd)
 			p.RootPage = parentInd
 		} else {
@@ -270,6 +271,14 @@ func (p *Pager) ClearPager() {
 	}
 
 	p.File.Close()
+}
+
+func (p *Pager) updateParentOfChildren(newParentInd uint32) {
+	page := p.GetPage(newParentInd)
+	for i := 0; i <= int(page.nodeHeader.numCells); i++ {
+		childPage := p.GetPage(page.getPointerInternal(uint16(i)))
+		childPage.updateParent(newParentInd)
+	}
 }
 
 func (p *Pager) PrintPages() {
