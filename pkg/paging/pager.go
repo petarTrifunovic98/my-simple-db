@@ -63,6 +63,25 @@ func (p *Pager) insertNewPage(page *Page, ind uint32) {
 func (p *Pager) findNodeToInsert(currentPageInd uint32, key []byte) uint32 {
 	currentPage := p.GetPage(currentPageInd)
 	if currentPage.nodeHeader.nodeType != LEAF_NODE {
+		if currentPage.nodeHeader.isRoot {
+			if !currentPage.hasSufficientSpaceInternal() {
+				newPage := NewPageWithParams(INTERNAL_NODE, false, 0, 0, 0)
+				parent := NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
+
+				parentInd := p.getNextPageInd()
+				p.insertNewPage(parent, parentInd)
+
+				newRightChildInd := p.getNextPageInd()
+				p.insertNewPage(newPage, newRightChildInd)
+
+				p.Pages[0] = parent
+				p.Pages[parentInd] = currentPage
+				currentPage.transferCellsInternal(0, parentInd, newRightChildInd, parent, newPage)
+
+				currentPage = parent
+			}
+		}
+
 		nextPageInd := currentPage.getPointerInternal(currentPage.findIndexForKeyInternal(key))
 		return p.findNodeToInsert(nextPageInd, key)
 	} else {
