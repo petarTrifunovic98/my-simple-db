@@ -199,6 +199,56 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
 
 }
 
+func (p *Page) transferCellsInternalNotRoot(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent *Page, destination *Page) {
+
+	// find the offset and the key of the middle element
+	middleElementOffset := p.getOffsetInternal((p.nodeHeader.numCells - 1) / 2)
+	middleElementKey := p.getKeyInternal((p.nodeHeader.numCells - 1) / 2)
+
+	/**
+	 * update number of cells; newParent gets one new element,
+	 * while children are left with half of the previous number
+	 * of elements
+	 */
+	destination.nodeHeader.numCells = p.nodeHeader.numCells / 2
+	p.nodeHeader.numCells = (p.nodeHeader.numCells - 1) / 2
+
+	/**
+	 * update total body size according to new elements added to each page
+	 */
+	// Size of parent increases by one key size and two pointer sizes (for now)
+	// TODO: change 2*4 to 2*CHILD_POINTER_SIZE
+	destination.nodeHeader.totalBodySize =
+		destination.nodeHeader.numCells*(4+destination.nodeHeader.keySize) + 4
+	p.nodeHeader.totalBodySize = p.nodeHeader.numCells*(4+destination.nodeHeader.keySize) + 4
+
+	p.nodeHeader.isRoot = false
+	p.nodeHeader.parent = newParentInd
+	destination.nodeHeader.parent = newParentInd
+
+	indForKey := newParent.findIndexForKeyInternal(middleElementKey)
+	pointerOffset := newParent.getOffsetInternal(indForKey)
+	// pointerOffset := p.getOffsetInternal(indForKey)
+
+	/**
+	 * Update the parent and the new child's offset list
+	 */
+	// put children pointers and copy middle element key to the new parent
+	newParent.nodeHeader.totalBodySize += 4 + p.nodeHeader.keySize
+	copy(newParent.nodeBody[pointerOffset+2*4+p.nodeHeader.keySize:],
+		newParent.nodeBody[pointerOffset+4:newParent.nodeHeader.totalBodySize])
+	copy(newParent.nodeBody[pointerOffset+4:], middleElementKey)
+	binary.LittleEndian.PutUint32(newParent.nodeBody[pointerOffset:], oldChildInd)
+	binary.LittleEndian.PutUint32(newParent.nodeBody[pointerOffset+4+p.nodeHeader.keySize:], newChildInd)
+	newParent.nodeHeader.numCells++
+
+	/**
+	 * Transfer data to new pages
+	 */
+	copy(destination.nodeBody[:],
+		p.nodeBody[middleElementOffset+4+p.nodeHeader.keySize:])
+}
+
 /**
  * Currently:
  *  - splits the page "p", sends the middle element to "newParent"
