@@ -199,6 +199,10 @@ func (p *Page) insertDataAtIndex(ind uint16, key []byte, data []byte) {
 
 }
 
+func (p *Page) updateParent(newParentInd uint32) {
+	p.nodeHeader.parent = newParentInd
+}
+
 func (p *Page) transferCellsInternalNotRoot(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent *Page, destination *Page) {
 
 	// find the offset and the key of the middle element
