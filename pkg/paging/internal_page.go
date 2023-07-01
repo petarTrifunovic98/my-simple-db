@@ -9,12 +9,72 @@ type InternalPage struct {
 	PageBase
 }
 
+func NewInternalPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *InternalPage {
+	return nil
+}
+
+func NewInternalPage() *InternalPage {
+	return nil
+}
+
+func (ip *InternalPage) getType() NodeType {
+	return ip.nodeHeader.nodeType
+}
+
+func (ip *InternalPage) getIsRoot() bool {
+	return ip.nodeHeader.isRoot
+}
+
+func (ip *InternalPage) getParent() uint32 {
+	return ip.nodeHeader.parent
+}
+
+func (ip *InternalPage) getNumCells() uint16 {
+	return ip.nodeHeader.numCells
+}
+
+func (ip *InternalPage) getKeySize() uint16 {
+	return ip.nodeHeader.keySize
+}
+
+func (ip *InternalPage) getTotalBodySize() uint16 {
+	return ip.nodeHeader.totalBodySize
+}
+
+func (ip *InternalPage) setIsRoot(isRoot bool) {
+	ip.nodeHeader.isRoot = isRoot
+}
+
+func (ip *InternalPage) setParent(parent uint32) {
+	ip.nodeHeader.parent = parent
+}
+
+func (ip *InternalPage) setNumCells(numCells uint16) {
+	ip.nodeHeader.numCells = numCells
+}
+
+func (ip *InternalPage) setTotalBodySize(totalBodySize uint16) {
+	ip.nodeHeader.totalBodySize = totalBodySize
+}
+
+func (ip *InternalPage) setNodeBody(nodeBodyBytes []byte) {
+	copy(ip.nodeBody[:], nodeBodyBytes)
+}
+
+func (ip *InternalPage) setNodeBodyRange(nodeBodyBytes []byte, startInd uint16) {
+	copy(ip.nodeBody[startInd:], nodeBodyBytes)
+}
+
 func (ip *InternalPage) getOffset(ind uint16) uint16 {
 	return ind * (4 + ip.nodeHeader.keySize)
 }
 
 func (ip *InternalPage) getKey(ind uint16) []byte {
 	return ip.nodeBody[4+ind*(4+ip.nodeHeader.keySize) : 4+ind*(4+ip.nodeHeader.keySize)+ip.nodeHeader.keySize]
+}
+
+func (ip *InternalPage) getBody() []byte {
+	return ip.nodeBody[:]
 }
 
 func (ip *InternalPage) findIndexForKey(key []byte) uint16 {
@@ -39,7 +99,7 @@ func (ip *InternalPage) findIndexForKey(key []byte) uint16 {
 	return currentIndex
 }
 
-func (ip *InternalPage) transferCellsNotRoot(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent *Page, dest *Page) {
+func (ip *InternalPage) transferCellsNotRoot(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent IPage, dest IPage) {
 
 	// find the offset and the key of the middle element
 	middleElementOffset := ip.getOffset((ip.nodeHeader.numCells - 1) / 2)
@@ -50,7 +110,7 @@ func (ip *InternalPage) transferCellsNotRoot(newParentInd uint32, oldChildInd ui
 	 * while children are left with half of the previous number
 	 * of elements
 	 */
-	dest.nodeHeader.numCells = ip.nodeHeader.numCells / 2
+	dest.setNumCells(ip.nodeHeader.numCells / 2)
 	ip.nodeHeader.numCells = (ip.nodeHeader.numCells - 1) / 2
 
 	/**
@@ -58,38 +118,44 @@ func (ip *InternalPage) transferCellsNotRoot(newParentInd uint32, oldChildInd ui
 	 */
 	// Size of parent increases by one key size and two pointer sizes (for now)
 	// TODO: change 2*4 to 2*CHILD_POINTER_SIZE
-	dest.nodeHeader.totalBodySize =
-		dest.nodeHeader.numCells*(4+dest.nodeHeader.keySize) + 4
-	ip.nodeHeader.totalBodySize = ip.nodeHeader.numCells*(4+dest.nodeHeader.keySize) + 4
+	dest.setTotalBodySize(dest.getNumCells()*(4+dest.getKeySize()) + 4)
+	ip.nodeHeader.totalBodySize = ip.nodeHeader.numCells*(4+dest.getKeySize()) + 4
 
 	ip.nodeHeader.isRoot = false
 	ip.nodeHeader.parent = newParentInd
-	dest.nodeHeader.parent = newParentInd
+	dest.setParent(newParentInd)
 
-	indForKey := newParent.findIndexForKeyInternal(middleElementKey)
-	pointerOffset := newParent.getOffsetInternal(indForKey)
+	indForKey := newParent.findIndexForKey(middleElementKey)
+	pointerOffset := newParent.getOffset(indForKey)
 	// pointerOffset := p.getOffsetInternal(indForKey)
 
 	/**
 	 * Update the parent and the new child's offset list
 	 */
 	// put children pointers and copy middle element key to the new parent
-	newParent.nodeHeader.totalBodySize += 4 + ip.nodeHeader.keySize
-	copy(newParent.nodeBody[pointerOffset+2*4+ip.nodeHeader.keySize:],
-		newParent.nodeBody[pointerOffset+4:newParent.nodeHeader.totalBodySize])
-	copy(newParent.nodeBody[pointerOffset+4:], middleElementKey)
-	binary.LittleEndian.PutUint32(newParent.nodeBody[pointerOffset:], oldChildInd)
-	binary.LittleEndian.PutUint32(newParent.nodeBody[pointerOffset+4+ip.nodeHeader.keySize:], newChildInd)
-	newParent.nodeHeader.numCells++
+	newParent.setTotalBodySize(newParent.getTotalBodySize() + 4 + ip.nodeHeader.keySize)
+	newParent.setNodeBodyRange(newParent.getBody()[pointerOffset+4:newParent.getTotalBodySize()],
+		pointerOffset+2*4+ip.nodeHeader.keySize)
+
+	newParent.setNodeBodyRange(middleElementKey, pointerOffset+4)
+
+	oldChildIndBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(oldChildIndBytes, oldChildInd)
+	newParent.setNodeBodyRange(oldChildIndBytes, pointerOffset)
+
+	newChildIndBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(newChildIndBytes, newChildInd)
+	newParent.setNodeBodyRange(newChildIndBytes, pointerOffset+4+ip.nodeHeader.keySize)
+
+	newParent.setNumCells(newParent.getNumCells() + 1)
 
 	/**
 	 * Transfer data to new pages
 	 */
-	copy(dest.nodeBody[:],
-		ip.nodeBody[middleElementOffset+4+ip.nodeHeader.keySize:])
+	dest.setNodeBody(ip.nodeBody[middleElementOffset+4+ip.nodeHeader.keySize:])
 }
 
-func (ip *InternalPage) transferCells(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent *Page, dest *Page) {
+func (ip *InternalPage) transferCells(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent IPage, dest IPage) {
 
 	// find the offset and the key of the middle element
 	middleElementOffset := ip.getOffset((ip.nodeHeader.numCells - 1) / 2)
@@ -100,7 +166,7 @@ func (ip *InternalPage) transferCells(newParentInd uint32, oldChildInd uint32, n
 	 * while children are left with half of the previous number
 	 * of elements
 	 */
-	dest.nodeHeader.numCells = ip.nodeHeader.numCells / 2
+	dest.setNumCells(ip.nodeHeader.numCells / 2)
 	ip.nodeHeader.numCells = (ip.nodeHeader.numCells - 1) / 2
 
 	/**
@@ -108,33 +174,49 @@ func (ip *InternalPage) transferCells(newParentInd uint32, oldChildInd uint32, n
 	 */
 	// Size of parent increases by one key size and two pointer sizes (for now)
 	// TODO: change 2*4 to 2*CHILD_POINTER_SIZE
-	dest.nodeHeader.totalBodySize =
-		dest.nodeHeader.numCells*(4+dest.nodeHeader.keySize) + 4
-	ip.nodeHeader.totalBodySize = ip.nodeHeader.numCells*(4+dest.nodeHeader.keySize) + 4
+	dest.setTotalBodySize(dest.getNumCells()*(4+dest.getKeySize()) + 4)
+	ip.nodeHeader.totalBodySize = ip.nodeHeader.numCells*(4+dest.getKeySize()) + 4
 
 	ip.nodeHeader.isRoot = false
 	ip.nodeHeader.parent = newParentInd
-	dest.nodeHeader.parent = newParentInd
+	dest.setParent(newParentInd)
 
-	indForKey := newParent.findIndexForKeyInternal(middleElementKey)
-	pointerOffset := newParent.getOffsetInternal(indForKey)
+	indForKey := newParent.findIndexForKey(middleElementKey)
+	pointerOffset := newParent.getOffset(indForKey)
 	// pointerOffset := p.getOffsetInternal(indForKey)
 
 	/**
 	 * Update the parent and the new child's offset list
 	 */
 	// put children pointers and copy middle element key to the new parent
-	newParent.nodeHeader.totalBodySize += 4 + ip.nodeHeader.keySize + 4
-	copy(newParent.nodeBody[pointerOffset+2*4+ip.nodeHeader.keySize:],
-		newParent.nodeBody[pointerOffset+4:newParent.nodeHeader.totalBodySize])
-	copy(newParent.nodeBody[pointerOffset+4:], middleElementKey)
-	binary.LittleEndian.PutUint32(newParent.nodeBody[pointerOffset:], oldChildInd)
-	binary.LittleEndian.PutUint32(newParent.nodeBody[pointerOffset+4+ip.nodeHeader.keySize:], newChildInd)
-	newParent.nodeHeader.numCells++
+	newParent.setTotalBodySize(newParent.getTotalBodySize() + 4 + ip.nodeHeader.keySize + 4)
+	newParent.setNodeBodyRange(newParent.getBody()[pointerOffset+4:newParent.getTotalBodySize()],
+		pointerOffset+2*4+ip.nodeHeader.keySize)
+	newParent.setNodeBodyRange(middleElementKey, pointerOffset+4)
+
+	oldChildIndBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(oldChildIndBytes, oldChildInd)
+	newParent.setNodeBodyRange(oldChildIndBytes, pointerOffset)
+
+	newChildIndBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(newChildIndBytes, newChildInd)
+	newParent.setNodeBodyRange(newChildIndBytes, pointerOffset+4+ip.nodeHeader.keySize)
+
+	newParent.setNumCells(newParent.getNumCells() + 1)
 
 	/**
 	 * Transfer data to new pages
 	 */
-	copy(dest.nodeBody[:],
-		ip.nodeBody[middleElementOffset+4+ip.nodeHeader.keySize:])
+
+	dest.setNodeBody(ip.nodeBody[middleElementOffset+4+ip.nodeHeader.keySize:])
+}
+
+func (ip *InternalPage) hasSufficientSpace(addedSize uint16) bool {
+	// oldSize := NODE_HEADER_SIZE + p.nodeHeader.totalBodySize
+	// newSize := oldSize + addedSize
+	// return newSize <= PAGE_SIZE
+
+	// For testing purposes. The commented code above is the correct code.
+	return ip.nodeHeader.numCells < 3
+
 }

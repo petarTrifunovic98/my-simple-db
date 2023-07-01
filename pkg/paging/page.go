@@ -48,6 +48,25 @@ func NewPage() *Page {
 
 // NEXT STEP: implement internal node creation
 func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *Page {
+	var p IPage
+	
+	if nodeType == LEAF_NODE {
+		p = &LeafPage{
+			PageBase: PageBase{
+				nodeHeader: NodeHeader{
+					nodeType:      nodeType,
+					isRoot:        isRoot,
+					parent:        parent,
+					numCells:      numCells,
+					totalBodySize: totalBodySize,
+					keySize:       KEY_SIZE,
+				},
+			},
+		}
+	} else {
+		p = &
+	}
+
 	p := &Page{
 		nodeHeader: NodeHeader{
 			nodeType:      nodeType,

@@ -10,7 +10,7 @@ import (
 const MAX_PAGES_PER_TABLE uint32 = 100
 
 type Pager struct {
-	Pages             []*Page
+	Pages             []IPage
 	File              *os.File
 	SizesWritten      []uint32
 	CurrentValueIndex uint32
@@ -41,7 +41,7 @@ func NewPager(filename string) *Pager {
 	fmt.Println("Num pages:", numPages)
 
 	pager := &Pager{
-		Pages:             make([]*Page, numPages, MAX_PAGES_PER_TABLE),
+		Pages:             make([]IPage, numPages, MAX_PAGES_PER_TABLE),
 		File:              file,
 		SizesWritten:      make([]uint32, 0),
 		CurrentValueIndex: 0,
@@ -56,7 +56,7 @@ func (p *Pager) getNextPageInd() uint32 {
 	return p.NumPages
 }
 
-func (p *Pager) insertNewPage(page *Page, ind uint32) {
+func (p *Pager) insertNewPage(page IPage, ind uint32) {
 	if ind == p.NumPages {
 		p.Pages = append(p.Pages, page)
 	} else {
@@ -67,29 +67,29 @@ func (p *Pager) insertNewPage(page *Page, ind uint32) {
 
 func (p *Pager) findNodeToInsert(currentPageInd uint32, key []byte) uint32 {
 	currentPage := p.GetPage(currentPageInd)
-	if currentPage.nodeHeader.nodeType != LEAF_NODE {
-		if !currentPage.hasSufficientSpaceInternal() {
-			newPage := NewPageWithParams(INTERNAL_NODE, false, 0, 0, 0)
-			var parent *Page
+	if currentPage.getType() != LEAF_NODE {
+		if !currentPage.hasSufficientSpace(uint16(4 + len(key))) {
+			newPage := NewIPageWithParams(INTERNAL_NODE, false, 0, 0, 0)
+			var parent IPage
 			var parentInd uint32
 
-			if currentPage.nodeHeader.isRoot {
-				parent = NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
+			if currentPage.getIsRoot() {
+				parent = NewIPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
 				parentInd = p.getNextPageInd()
 				p.insertNewPage(parent, parentInd)
 				p.RootPage = parentInd
 			} else {
-				parentInd = currentPage.nodeHeader.parent
+				parentInd = currentPage.getParent()
 				parent = p.GetPage(parentInd)
 			}
 
 			newRightChildInd := p.getNextPageInd()
 			p.insertNewPage(newPage, newRightChildInd)
 
-			if currentPage.nodeHeader.isRoot {
-				currentPage.transferCellsInternal(parentInd, currentPageInd, newRightChildInd, parent, newPage)
+			if currentPage.getIsRoot() {
+				currentPage.transferCells(parentInd, currentPageInd, newRightChildInd, parent, newPage)
 			} else {
-				currentPage.transferCellsInternalNotRoot(parentInd, currentPageInd, newRightChildInd, parent, newPage)
+				currentPage.transferCellsNotRoot(parentInd, currentPageInd, newRightChildInd, parent, newPage)
 			}
 
 			p.updateParentOfChildren(newRightChildInd)
@@ -222,7 +222,7 @@ func (p *Pager) ReadWholeCurrentPage() []byte {
 	return values
 }
 
-func (p *Pager) GetPage(ind uint32) *Page {
+func (p *Pager) GetPage(ind uint32) IPage {
 	if ind < p.NumPages {
 		if p.Pages[ind] == nil {
 			tempBytes := make([]byte, PAGE_SIZE)
@@ -231,7 +231,11 @@ func (p *Pager) GetPage(ind uint32) *Page {
 			nodeHeader.Deserialize(tempBytes)
 			nodeBodyBytes := tempBytes[NODE_HEADER_SIZE:]
 
-			p.Pages[ind] = NewPageWithParams(
+			if nodeHeader.nodeType == LEAF_NODE {
+
+			}
+
+			p.Pages[ind] = NewIPageWithParams(
 				nodeHeader.nodeType,
 				nodeHeader.isRoot,
 				nodeHeader.parent,
@@ -239,13 +243,14 @@ func (p *Pager) GetPage(ind uint32) *Page {
 				nodeHeader.totalBodySize,
 			)
 
-			copy(p.Pages[ind].nodeBody[:], nodeBodyBytes)
+			p.Pages[ind].setNodeBody(nodeBodyBytes)
 		}
 	} else {
-		newPages := make([]*Page, ind-p.NumPages+1)
-		p.Pages = append(p.Pages, newPages...)
-		p.Pages[ind] = NewPage()
-		p.NumPages++
+		// newPages := make([]IPage, ind-p.NumPages+1)
+		// p.Pages = append(p.Pages, newPages...)
+		// p.Pages[ind] = NewPage()
+		// p.NumPages++
+		panic("Page index out of range!")
 	}
 	return p.Pages[ind]
 }
