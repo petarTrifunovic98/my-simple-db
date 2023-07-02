@@ -47,39 +47,37 @@ func NewPage() *Page {
 }
 
 // NEXT STEP: implement internal node creation
-func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *Page {
-	var p IPage
-	
-	if nodeType == LEAF_NODE {
-		p = &LeafPage{
-			PageBase: PageBase{
-				nodeHeader: NodeHeader{
-					nodeType:      nodeType,
-					isRoot:        isRoot,
-					parent:        parent,
-					numCells:      numCells,
-					totalBodySize: totalBodySize,
-					keySize:       KEY_SIZE,
-				},
-			},
-		}
-	} else {
-		p = &
-	}
+// func NewPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *Page {
+// 	//var p IPage
 
-	p := &Page{
-		nodeHeader: NodeHeader{
-			nodeType:      nodeType,
-			isRoot:        isRoot,
-			parent:        parent,
-			numCells:      numCells,
-			totalBodySize: totalBodySize,
-			keySize:       KEY_SIZE,
-		},
-	}
+// 	if nodeType == LEAF_NODE {
+// 		p := &LeafPage{
+// 			PageBase: PageBase{
+// 				nodeHeader: NodeHeader{
+// 					nodeType:      nodeType,
+// 					isRoot:        isRoot,
+// 					parent:        parent,
+// 					numCells:      numCells,
+// 					totalBodySize: totalBodySize,
+// 					keySize:       KEY_SIZE,
+// 				},
+// 			},
+// 		}
+// 	}
 
-	return p
-}
+// 	a := &Page{
+// 		nodeHeader: NodeHeader{
+// 			nodeType:      nodeType,
+// 			isRoot:        isRoot,
+// 			parent:        parent,
+// 			numCells:      numCells,
+// 			totalBodySize: totalBodySize,
+// 			keySize:       KEY_SIZE,
+// 		},
+// 	}
+
+// 	return a
+// }
 
 func (p *Page) getOffset(ind uint16) uint16 {
 	return binary.LittleEndian.Uint16(p.nodeBody[ind*OFFSET_SIZE:])

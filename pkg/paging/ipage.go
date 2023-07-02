@@ -1,6 +1,7 @@
 package paging
 
 type IPage interface {
+	getHeader() *NodeHeader
 	getType() NodeType
 	getIsRoot() bool
 	getParent() uint32
@@ -19,7 +20,7 @@ type IPage interface {
 	findIndexForKey([]byte) uint16
 	transferCellsNotRoot(uint32, uint32, uint32, IPage, IPage)
 	transferCells(uint32, uint32, uint32, IPage, IPage)
-	hasSufficientSpace(uint16) bool
+	hasSufficientSpace(addedSize uint16) bool
 }
 
 type PageBase struct {

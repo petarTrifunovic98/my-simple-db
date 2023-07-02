@@ -10,11 +10,28 @@ type LeafPage struct {
 }
 
 func NewLeafPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *LeafPage {
-	return nil
+	p := &LeafPage{
+		PageBase: PageBase{
+			nodeHeader: NodeHeader{
+				nodeType:      nodeType,
+				isRoot:        isRoot,
+				parent:        parent,
+				numCells:      numCells,
+				totalBodySize: totalBodySize,
+				keySize:       KEY_SIZE,
+			},
+		},
+	}
+
+	return p
 }
 
 func NewLeafPage() *LeafPage {
 	return nil
+}
+
+func (lp *LeafPage) getHeader() *NodeHeader {
+	return &lp.nodeHeader
 }
 
 func (lp *LeafPage) getType() NodeType {
@@ -242,4 +259,70 @@ func (lp *LeafPage) hasSufficientSpace(addedSize uint16) bool {
 	oldSize := NODE_HEADER_SIZE + lp.nodeHeader.totalBodySize
 	newSize := oldSize + addedSize + lp.nodeHeader.keySize + DATA_SIZE_SIZE
 	return newSize <= PAGE_SIZE
+}
+
+func (lp *LeafPage) insertDataAtIndex(ind uint16, key []byte, data []byte) {
+	startOfCells := lp.getStartOfCells()
+	keySize := lp.nodeHeader.keySize
+	totalBodySize := lp.nodeHeader.totalBodySize
+	dataLen16 := uint16(len(data))
+	lenIncrease := keySize + 2 + dataLen16
+
+	offsets := make([]byte /*0,*/, (lp.nodeHeader.numCells+1)*OFFSET_SIZE)
+	copy(offsets, lp.nodeBody[:startOfCells])
+	cells := make([]byte /*0,*/, (totalBodySize-startOfCells)+lenIncrease)
+	copy(cells, lp.nodeBody[startOfCells:totalBodySize])
+
+	/**
+	 * Update offsets list
+	 */
+	if ind < lp.nodeHeader.numCells {
+		/**
+		 * Insert a new cell among the existing ones.
+		 */
+		nthOffset := binary.LittleEndian.Uint16(offsets[ind*OFFSET_SIZE:])
+		// make room for the new cell by shifting a part of the existing ones to the right
+		copy(cells[nthOffset+lenIncrease:], cells[nthOffset:totalBodySize-startOfCells])
+		// insert the cell key
+		copy(cells[nthOffset:nthOffset+keySize], key)
+		// insert the cell data size
+		dataLen16Bytes := make([]byte, 2)
+		binary.LittleEndian.PutUint16(dataLen16Bytes, dataLen16)
+		copy(cells[nthOffset+keySize:nthOffset+keySize+2], dataLen16Bytes)
+		// insert the cell data
+		copy(cells[nthOffset+keySize+2:nthOffset+keySize+2+dataLen16], data)
+
+		// Shift the necessary offsets to the right in the offsets list
+		for i := lp.nodeHeader.numCells - 1; int16(i) >= int16(ind); i-- {
+			// Get the old offset at index i
+			oldOffset := binary.LittleEndian.Uint16(offsets[i*OFFSET_SIZE:])
+			// Update the old index by adding new cell size
+			newOffset := oldOffset + uint16(lenIncrease)
+			newOffsetBytes := make([]byte, 2)
+			binary.LittleEndian.PutUint16(newOffsetBytes, newOffset)
+			// Insert the new offset and immediately shift it to the right
+			copy(offsets[(i+1)*OFFSET_SIZE:(i+2)*OFFSET_SIZE], newOffsetBytes)
+		}
+	} else {
+		newOffsetBytes := make([]byte, 2)
+		binary.LittleEndian.PutUint16(newOffsetBytes, totalBodySize-startOfCells)
+		copy(offsets[lp.nodeHeader.numCells*OFFSET_SIZE:], newOffsetBytes)
+		copy(cells[totalBodySize-startOfCells:], key)
+		dataLen16Bytes := make([]byte, 2)
+		binary.LittleEndian.PutUint16(dataLen16Bytes, dataLen16)
+		copy(cells[totalBodySize-startOfCells+keySize:], dataLen16Bytes)
+		copy(cells[totalBodySize-startOfCells+keySize+2:], data)
+	}
+
+	lp.nodeHeader.numCells++
+	lp.nodeHeader.totalBodySize += lenIncrease + OFFSET_SIZE
+	copy(lp.nodeBody[:], offsets)
+	copy(lp.nodeBody[lp.nodeHeader.numCells*OFFSET_SIZE:], cells)
+
+}
+
+func (lp *LeafPage) getData(ind uint16) []byte {
+	cellStart := lp.nodeBody[lp.getStartOfCells()+lp.getOffset(ind):]
+	dataSize := binary.LittleEndian.Uint16(cellStart[lp.nodeHeader.keySize:])
+	return cellStart[lp.nodeHeader.keySize+DATA_SIZE_SIZE : lp.nodeHeader.keySize+DATA_SIZE_SIZE+dataSize]
 }

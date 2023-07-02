@@ -10,11 +10,28 @@ type InternalPage struct {
 }
 
 func NewInternalPageWithParams(nodeType NodeType, isRoot bool, parent uint32, numCells uint16, totalBodySize uint16) *InternalPage {
-	return nil
+	p := &InternalPage{
+		PageBase: PageBase{
+			nodeHeader: NodeHeader{
+				nodeType:      nodeType,
+				isRoot:        isRoot,
+				parent:        parent,
+				numCells:      numCells,
+				totalBodySize: totalBodySize,
+				keySize:       KEY_SIZE,
+			},
+		},
+	}
+
+	return p
 }
 
 func NewInternalPage() *InternalPage {
 	return nil
+}
+
+func (ip *InternalPage) getHeader() *NodeHeader {
+	return &ip.nodeHeader
 }
 
 func (ip *InternalPage) getType() NodeType {
@@ -75,6 +92,11 @@ func (ip *InternalPage) getKey(ind uint16) []byte {
 
 func (ip *InternalPage) getBody() []byte {
 	return ip.nodeBody[:]
+}
+
+func (ip *InternalPage) getPointer(ind uint16) uint32 {
+	pointerBytes := ip.nodeBody[ind*(4+ip.nodeHeader.keySize) : ind*(4+ip.nodeHeader.keySize)+4]
+	return binary.LittleEndian.Uint32(pointerBytes)
 }
 
 func (ip *InternalPage) findIndexForKey(key []byte) uint16 {
