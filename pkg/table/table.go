@@ -34,6 +34,11 @@ func (t *Table) Select() []byte {
 	return values
 }
 
+func (t *Table) SelectOne(key []byte) []byte {
+	value := t.Pager.ReadDataByKey(key)
+	return value
+}
+
 func (t *Table) PrintInternalStructure() {
 	t.Pager.PrintPages()
 }

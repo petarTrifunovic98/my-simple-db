@@ -10,7 +10,7 @@ import (
 const MAX_PAGES_PER_TABLE uint32 = 100
 
 type Pager struct {
-	Pages             []*Page
+	Pages             []IPage
 	File              *os.File
 	SizesWritten      []uint32
 	CurrentValueIndex uint32
@@ -41,7 +41,7 @@ func NewPager(filename string) *Pager {
 	fmt.Println("Num pages:", numPages)
 
 	pager := &Pager{
-		Pages:             make([]*Page, numPages, MAX_PAGES_PER_TABLE),
+		Pages:             make([]IPage, numPages, MAX_PAGES_PER_TABLE),
 		File:              file,
 		SizesWritten:      make([]uint32, 0),
 		CurrentValueIndex: 0,
@@ -56,7 +56,7 @@ func (p *Pager) getNextPageInd() uint32 {
 	return p.NumPages
 }
 
-func (p *Pager) insertNewPage(page *Page, ind uint32) {
+func (p *Pager) insertNewPage(page IPage, ind uint32) {
 	if ind == p.NumPages {
 		p.Pages = append(p.Pages, page)
 	} else {
@@ -67,37 +67,56 @@ func (p *Pager) insertNewPage(page *Page, ind uint32) {
 
 func (p *Pager) findNodeToInsert(currentPageInd uint32, key []byte) uint32 {
 	currentPage := p.GetPage(currentPageInd)
-	if currentPage.nodeHeader.nodeType != LEAF_NODE {
-		if !currentPage.hasSufficientSpaceInternal() {
-			newPage := NewPageWithParams(INTERNAL_NODE, false, 0, 0, 0)
-			var parent *Page
+	if currentPage.getType() != LEAF_NODE {
+		if !currentPage.hasSufficientSpace(uint16(4 + len(key))) {
+			newPage := NewIPageWithParams(INTERNAL_NODE, false, 0, 0, 0)
+			var parent IPage
 			var parentInd uint32
 
-			if currentPage.nodeHeader.isRoot {
-				parent = NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
+			if currentPage.getIsRoot() {
+				parent = NewIPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
 				parentInd = p.getNextPageInd()
 				p.insertNewPage(parent, parentInd)
 				p.RootPage = parentInd
 			} else {
-				parentInd = currentPage.nodeHeader.parent
+				parentInd = currentPage.getParent()
 				parent = p.GetPage(parentInd)
 			}
 
 			newRightChildInd := p.getNextPageInd()
 			p.insertNewPage(newPage, newRightChildInd)
 
-			if currentPage.nodeHeader.isRoot {
-				currentPage.transferCellsInternal(parentInd, currentPageInd, newRightChildInd, parent, newPage)
+			if currentPage.getIsRoot() {
+				currentPage.transferCells(parentInd, currentPageInd, newRightChildInd, parent, newPage)
 			} else {
-				currentPage.transferCellsInternalNotRoot(parentInd, currentPageInd, newRightChildInd, parent, newPage)
+				currentPage.transferCellsNotRoot(parentInd, currentPageInd, newRightChildInd, parent, newPage)
 			}
 
 			p.updateParentOfChildren(newRightChildInd)
 			currentPage = parent
 		}
 
-		nextPageInd := currentPage.getPointerInternal(currentPage.findIndexForKeyInternal(key))
+		internalPage := currentPage.(*InternalPage)
+		keyInd, _ := internalPage.findIndexForKey(key)
+		nextPageInd := internalPage.getPointer(keyInd)
 		return p.findNodeToInsert(nextPageInd, key)
+	} else {
+		return currentPageInd
+	}
+}
+
+func (p *Pager) findNodeToRead(currentPageInd uint32, key []byte) uint32 {
+	currentPage := p.GetPage(currentPageInd)
+	if currentPage.getType() != LEAF_NODE {
+		internalPage := currentPage.(*InternalPage)
+		keyInd, exists := internalPage.findIndexForKey(key)
+		var nextPageInd uint32
+		if exists {
+			nextPageInd = internalPage.getPointer(keyInd + 1)
+		} else {
+			nextPageInd = internalPage.getPointer(keyInd)
+		}
+		return p.findNodeToRead(nextPageInd, key)
 	} else {
 		return currentPageInd
 	}
@@ -106,7 +125,7 @@ func (p *Pager) findNodeToInsert(currentPageInd uint32, key []byte) uint32 {
 func (p *Pager) AddNewData(key []byte, data []byte) {
 	if p.NumPages == 0 {
 		p.NumPages = 1
-		p.Pages = append(p.Pages, NewPageWithParams(LEAF_NODE, true, 0, 0, 0))
+		p.Pages = append(p.Pages, NewIPageWithParams(LEAF_NODE, true, 0, 0, 0))
 	}
 
 	// root := p.GetPage(p.RootPage)
@@ -115,30 +134,30 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 	pageToInsertInd := p.findNodeToInsert(p.RootPage, key)
 	pageToInsert := p.GetPage(pageToInsertInd)
 
-	if !pageToInsert.hasSufficientSpace(data) {
+	if !pageToInsert.hasSufficientSpace(uint16(len(data))) {
 		/**
 		 * This executes when root is full, in order to split it.
 		 * Currently works only when root was leaf, and should now
 		 * be split into two children with new root.
 		 * TODO: Remove hard coded parts
 		 */
-		newPage := NewPageWithParams(LEAF_NODE, false, 0, 0, 0)
-		var parent *Page
+		newPage := NewIPageWithParams(LEAF_NODE, false, 0, 0, 0)
+		var parent IPage
 		var parentInd uint32
-		if pageToInsert.nodeHeader.isRoot {
-			parent = NewPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
+		if pageToInsert.getIsRoot() {
+			parent = NewIPageWithParams(INTERNAL_NODE, true, 0, 0, 0)
 			parentInd = p.getNextPageInd()
 			p.insertNewPage(parent, parentInd)
 			p.RootPage = parentInd
 		} else {
-			parentInd = pageToInsert.nodeHeader.parent
+			parentInd = pageToInsert.getParent()
 			parent = p.GetPage(parentInd)
 		}
 
 		newRightChildInd := p.getNextPageInd()
 		p.insertNewPage(newPage, newRightChildInd)
 
-		if pageToInsert.nodeHeader.isRoot {
+		if pageToInsert.getIsRoot() {
 			pageToInsert.transferCells(parentInd, pageToInsertInd, newRightChildInd, parent, newPage)
 		} else {
 			pageToInsert.transferCellsNotRoot(parentInd, pageToInsertInd, newRightChildInd, parent, newPage)
@@ -158,8 +177,9 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 		}
 	}
 
-	index := pageToInsert.findIndexForKey(key)
-	pageToInsert.insertDataAtIndex(index, key, data)
+	index, _ := pageToInsert.findIndexForKey(key)
+	leafPage := pageToInsert.(*LeafPage)
+	leafPage.insertDataAtIndex(index, key, data)
 }
 
 func (p *Pager) ReadAllPages() []byte {
@@ -173,56 +193,29 @@ func (p *Pager) ReadAllPages() []byte {
 
 func (p *Pager) ReadPageAtIndRec(ind uint32, values *[]byte) {
 	currentPage := p.GetPage(ind)
-	if currentPage.nodeHeader.nodeType == LEAF_NODE {
-		for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
-			*values = append(*values, currentPage.getData(uint16(i))...)
+	if currentPage.getType() == LEAF_NODE {
+		leafPage := currentPage.(*LeafPage)
+		for i := 0; i < int(currentPage.getNumCells()); i++ {
+			*values = append(*values, leafPage.getData(uint16(i))...)
 		}
 	} else {
-		for i := 0; i <= int(currentPage.nodeHeader.numCells); i++ {
-			p.ReadPageAtIndRec(currentPage.getPointerInternal(uint16(i)), values)
+		for i := 0; i <= int(currentPage.getNumCells()); i++ {
+			internalPage := currentPage.(*InternalPage)
+			p.ReadPageAtIndRec(internalPage.getPointer(uint16(i)), values)
 		}
 	}
 }
 
-func (p *Pager) ReadPageAtInd(ind uint32) []byte {
-	values := make([]byte, 0)
-	// var relevantLen uint32 = 0
+func (p *Pager) ReadDataByKey(key []byte) []byte {
+	pageInd := p.findNodeToRead(p.RootPage, key)
+	page := p.GetPage(pageInd)
 
-	currentPage := p.GetPage(ind)
-
-	for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
-		values = append(values, currentPage.getData(uint16(i))...)
-	}
-
-	// fmt.Println("values len:", relevantLen)
-	// fmt.Println("num pages:", len(p.Pages))
-
-	return values
+	ind, _ := page.findIndexForKey(key)
+	data := (page.(*LeafPage)).getData(ind)
+	return data
 }
 
-func (p *Pager) ReadWholeCurrentPage() []byte {
-	values := make([]byte, 0)
-	// var relevantLen uint32 = 0
-
-	var ind uint32
-	for ind = 0; ind < p.NumPages; ind++ {
-		currentPage := p.GetPage(ind)
-
-		for i := 0; i < int(currentPage.nodeHeader.numCells); i++ {
-			values = append(values, currentPage.getData(uint16(i))...)
-		}
-
-		//values2 = append(values2, currentPage.data2[:]...)
-		// relevantLen += currentPage.getRelevantLen()
-	}
-
-	// fmt.Println("values len:", relevantLen)
-	// fmt.Println("num pages:", len(p.Pages))
-
-	return values
-}
-
-func (p *Pager) GetPage(ind uint32) *Page {
+func (p *Pager) GetPage(ind uint32) IPage {
 	if ind < p.NumPages {
 		if p.Pages[ind] == nil {
 			tempBytes := make([]byte, PAGE_SIZE)
@@ -231,7 +224,7 @@ func (p *Pager) GetPage(ind uint32) *Page {
 			nodeHeader.Deserialize(tempBytes)
 			nodeBodyBytes := tempBytes[NODE_HEADER_SIZE:]
 
-			p.Pages[ind] = NewPageWithParams(
+			p.Pages[ind] = NewIPageWithParams(
 				nodeHeader.nodeType,
 				nodeHeader.isRoot,
 				nodeHeader.parent,
@@ -239,13 +232,14 @@ func (p *Pager) GetPage(ind uint32) *Page {
 				nodeHeader.totalBodySize,
 			)
 
-			copy(p.Pages[ind].nodeBody[:], nodeBodyBytes)
+			p.Pages[ind].setNodeBody(nodeBodyBytes)
 		}
 	} else {
-		newPages := make([]*Page, ind-p.NumPages+1)
-		p.Pages = append(p.Pages, newPages...)
-		p.Pages[ind] = NewPage()
-		p.NumPages++
+		// newPages := make([]IPage, ind-p.NumPages+1)
+		// p.Pages = append(p.Pages, newPages...)
+		// p.Pages[ind] = NewPage()
+		// p.NumPages++
+		panic("Page index out of range!")
 	}
 	return p.Pages[ind]
 }
@@ -259,10 +253,10 @@ func (p *Pager) ClearPager() {
 	for ind, page := range p.Pages {
 		if page != nil {
 			pageBytes := make([]byte, PAGE_SIZE)
-			nodeBytes := page.nodeHeader.Serialize()
+			nodeBytes := page.getHeader().Serialize()
 			copy(pageBytes, nodeBytes)
 
-			copy(pageBytes[NODE_HEADER_SIZE:], page.nodeBody[:])
+			copy(pageBytes[NODE_HEADER_SIZE:], page.getBody())
 
 			// n, _ := p.File.Write(pageBytes)
 			n, _ := p.File.WriteAt(pageBytes, int64((ind+1)*PAGE_SIZE))
@@ -275,9 +269,10 @@ func (p *Pager) ClearPager() {
 
 func (p *Pager) updateParentOfChildren(newParentInd uint32) {
 	page := p.GetPage(newParentInd)
-	for i := 0; i <= int(page.nodeHeader.numCells); i++ {
-		childPage := p.GetPage(page.getPointerInternal(uint16(i)))
-		childPage.updateParent(newParentInd)
+	internalPage := page.(*InternalPage)
+	for i := 0; i <= int(page.getNumCells()); i++ {
+		childPage := p.GetPage(internalPage.getPointer(uint16(i)))
+		childPage.setParent(newParentInd)
 	}
 }
 
@@ -286,7 +281,9 @@ func (p *Pager) PrintPages() {
 		if page == nil {
 			page = p.GetPage(uint32(ind))
 		}
-		page.Print()
+		//page.Print()
+		fmt.Println(page.getNumCells())
+		fmt.Println("Implement page printing")
 	}
 }
 
