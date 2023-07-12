@@ -17,7 +17,7 @@ type IPage interface {
 	getOffset(uint16) uint16
 	getKey(uint16) []byte
 	getBody() []byte
-	findIndexForKey([]byte) uint16
+	findIndexForKey([]byte) (ind uint16, key bool)
 	transferCellsNotRoot(uint32, uint32, uint32, IPage, IPage)
 	transferCells(uint32, uint32, uint32, IPage, IPage)
 	hasSufficientSpace(addedSize uint16) bool

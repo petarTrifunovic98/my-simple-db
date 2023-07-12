@@ -99,7 +99,7 @@ func (lp *LeafPage) getBody() []byte {
 	return lp.nodeBody[:]
 }
 
-func (lp *LeafPage) findIndexForKey(key []byte) uint16 {
+func (lp *LeafPage) findIndexForKey(key []byte) (ind uint16, exists bool) {
 	var leftIndex uint16 = 0
 	var rightIndex uint16 = lp.nodeHeader.numCells
 	currentIndex := rightIndex / 2
@@ -112,13 +112,13 @@ func (lp *LeafPage) findIndexForKey(key []byte) uint16 {
 		} else if compareResult == 1 {
 			rightIndex = currentIndex
 		} else {
-			return currentIndex
+			return currentIndex, true
 		}
 
 		currentIndex = (leftIndex + rightIndex) / 2
 	}
 
-	return currentIndex
+	return currentIndex, false
 }
 
 func (lp *LeafPage) transferCellsNotRoot(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent IPage, dest IPage) {
@@ -151,7 +151,7 @@ func (lp *LeafPage) transferCellsNotRoot(newParentInd uint32, oldChildInd uint32
 	lp.nodeHeader.parent = newParentInd
 	dest.setParent(newParentInd)
 
-	indForKey := newParent.findIndexForKey(middleElementKey)
+	indForKey, _ := newParent.findIndexForKey(middleElementKey)
 	pointerOffset := newParent.getOffset(indForKey)
 	// pointerOffset := p.getOffsetInternal(indForKey)
 

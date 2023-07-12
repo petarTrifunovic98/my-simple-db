@@ -99,7 +99,7 @@ func (ip *InternalPage) getPointer(ind uint16) uint32 {
 	return binary.LittleEndian.Uint32(pointerBytes)
 }
 
-func (ip *InternalPage) findIndexForKey(key []byte) uint16 {
+func (ip *InternalPage) findIndexForKey(key []byte) (ind uint16, exists bool) {
 	var leftIndex uint16 = 0
 	var rightIndex uint16 = ip.nodeHeader.numCells
 	currentIndex := rightIndex / 2
@@ -112,13 +112,13 @@ func (ip *InternalPage) findIndexForKey(key []byte) uint16 {
 		} else if compareResult == 1 {
 			rightIndex = currentIndex
 		} else {
-			return currentIndex
+			return currentIndex, true
 		}
 
 		currentIndex = (leftIndex + rightIndex) / 2
 	}
 
-	return currentIndex
+	return currentIndex, false
 }
 
 func (ip *InternalPage) transferCellsNotRoot(newParentInd uint32, oldChildInd uint32, newChildInd uint32, newParent IPage, dest IPage) {
@@ -147,7 +147,7 @@ func (ip *InternalPage) transferCellsNotRoot(newParentInd uint32, oldChildInd ui
 	ip.nodeHeader.parent = newParentInd
 	dest.setParent(newParentInd)
 
-	indForKey := newParent.findIndexForKey(middleElementKey)
+	indForKey, _ := newParent.findIndexForKey(middleElementKey)
 	pointerOffset := newParent.getOffset(indForKey)
 	// pointerOffset := p.getOffsetInternal(indForKey)
 
@@ -203,7 +203,7 @@ func (ip *InternalPage) transferCells(newParentInd uint32, oldChildInd uint32, n
 	ip.nodeHeader.parent = newParentInd
 	dest.setParent(newParentInd)
 
-	indForKey := newParent.findIndexForKey(middleElementKey)
+	indForKey, _ := newParent.findIndexForKey(middleElementKey)
 	pointerOffset := newParent.getOffset(indForKey)
 	// pointerOffset := p.getOffsetInternal(indForKey)
 

@@ -97,8 +97,26 @@ func (p *Pager) findNodeToInsert(currentPageInd uint32, key []byte) uint32 {
 		}
 
 		internalPage := currentPage.(*InternalPage)
-		nextPageInd := internalPage.getPointer(internalPage.findIndexForKey(key))
+		keyInd, _ := internalPage.findIndexForKey(key)
+		nextPageInd := internalPage.getPointer(keyInd)
 		return p.findNodeToInsert(nextPageInd, key)
+	} else {
+		return currentPageInd
+	}
+}
+
+func (p *Pager) findNodeToRead(currentPageInd uint32, key []byte) uint32 {
+	currentPage := p.GetPage(currentPageInd)
+	if currentPage.getType() != LEAF_NODE {
+		internalPage := currentPage.(*InternalPage)
+		keyInd, exists := internalPage.findIndexForKey(key)
+		var nextPageInd uint32
+		if exists {
+			nextPageInd = internalPage.getPointer(keyInd + 1)
+		} else {
+			nextPageInd = internalPage.getPointer(keyInd)
+		}
+		return p.findNodeToRead(nextPageInd, key)
 	} else {
 		return currentPageInd
 	}
@@ -159,7 +177,7 @@ func (p *Pager) AddNewData(key []byte, data []byte) {
 		}
 	}
 
-	index := pageToInsert.findIndexForKey(key)
+	index, _ := pageToInsert.findIndexForKey(key)
 	leafPage := pageToInsert.(*LeafPage)
 	leafPage.insertDataAtIndex(index, key, data)
 }
@@ -188,43 +206,14 @@ func (p *Pager) ReadPageAtIndRec(ind uint32, values *[]byte) {
 	}
 }
 
-// func (p *Pager) ReadPageAtInd(ind uint32) []byte {
-// 	values := make([]byte, 0)
-// 	// var relevantLen uint32 = 0
+func (p *Pager) ReadDataByKey(key []byte) []byte {
+	pageInd := p.findNodeToRead(p.RootPage, key)
+	page := p.GetPage(pageInd)
 
-// 	currentPage := p.GetPage(ind)
-
-// 	for i := 0; i < int(currentPage.getNumCells()); i++ {
-// 		values = append(values, currentPage.getData(uint16(i))...)
-// 	}
-
-// 	// fmt.Println("values len:", relevantLen)
-// 	// fmt.Println("num pages:", len(p.Pages))
-
-// 	return values
-// }
-
-// func (p *Pager) ReadWholeCurrentPage() []byte {
-// 	values := make([]byte, 0)
-// 	// var relevantLen uint32 = 0
-
-// 	var ind uint32
-// 	for ind = 0; ind < p.NumPages; ind++ {
-// 		currentPage := p.GetPage(ind)
-
-// 		for i := 0; i < int(currentPage.getNumCells()); i++ {
-// 			values = append(values, currentPage.getData(uint16(i))...)
-// 		}
-
-// 		//values2 = append(values2, currentPage.data2[:]...)
-// 		// relevantLen += currentPage.getRelevantLen()
-// 	}
-
-// 	// fmt.Println("values len:", relevantLen)
-// 	// fmt.Println("num pages:", len(p.Pages))
-
-// 	return values
-// }
+	ind, _ := page.findIndexForKey(key)
+	data := (page.(*LeafPage)).getData(ind)
+	return data
+}
 
 func (p *Pager) GetPage(ind uint32) IPage {
 	if ind < p.NumPages {
