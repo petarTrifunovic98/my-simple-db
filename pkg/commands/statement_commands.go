@@ -17,6 +17,7 @@ type StatementCommandType int8
 const (
 	STATEMENT_INSERT StatementCommandType = iota
 	STATEMENT_SELECT
+	STATEMENT_SELECT_ONE
 	STATEMENT_UNRECOGNIZED
 )
 
@@ -53,6 +54,56 @@ func NewStatementSelect(input string) *StatementSelect {
 	statement := &StatementSelect{
 		statementType: STATEMENT_SELECT,
 	}
+
+	return statement
+}
+
+type StatementSelectOne struct {
+	code          CommandExecutionStatusCode
+	statementType StatementCommandType
+	key           string
+}
+
+func (s *StatementSelectOne) Execute(t *table.Table) CommandExecutionStatusCode {
+	s.code = SUCCESS
+
+	id, err := strconv.Atoi(s.key)
+	if err != nil {
+		s.code = FAILURE
+		return s.code
+	}
+
+	keyBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(keyBytes, uint32(id))
+
+	value := t.SelectOne(keyBytes)
+	if len(value) <= 0 {
+		return s.code
+	}
+
+	b := bytes.NewBuffer(value)
+	for {
+		r := &row.Row{}
+		err := serialization.Deserialize(b, r)
+		if err != nil {
+			break
+		}
+		r.Print()
+	}
+	return s.code
+}
+
+func (s *StatementSelectOne) PrintPreExecution() {
+	fmt.Println("Executing select statement")
+}
+
+func NewStatementSelectOne(input string) *StatementSelectOne {
+	statement := &StatementSelectOne{
+		statementType: STATEMENT_SELECT_ONE,
+	}
+
+	inputParts := strings.Split(input, " ")
+	statement.key = inputParts[1]
 
 	return statement
 }

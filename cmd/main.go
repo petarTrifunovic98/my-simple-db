@@ -88,6 +88,8 @@ func getStatementCommand(input string) commands.Command {
 		return commands.NewStatementInsert(input)
 	} else if inputParts[0] == "select" {
 		return commands.NewStatementSelect(input)
+	} else if inputParts[0] == "selectOne" {
+		return commands.NewStatementSelectOne(input)
 	} else {
 		return commands.NewStatementUnrecognized(input)
 	}
