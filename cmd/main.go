@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/petarTrifunovic98/my-simple-db/pkg/commands"
+	inputprovider "github.com/petarTrifunovic98/my-simple-db/pkg/inputProvider"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
 
@@ -18,10 +19,15 @@ func main() {
 	defer t.DestroyTable()
 	fmt.Println("~ Started my db... ")
 
+	inputProvider := inputprovider.NewSocketInputProvider("localhost", "9988", "tcp")
+
 	for {
 		printPrompt()
 
-		input, err := getInput()
+		//inputProvider := inputprovider.NewStdinInputProvider()
+
+		input, err := inputProvider.GetInput()
+
 		if err != nil {
 			fmt.Printf("An error occurred while reading input! %v", err)
 			return
@@ -52,6 +58,14 @@ func main() {
 
 func printPrompt() {
 	fmt.Print(prompt)
+}
+
+func getInputByScanner(scanner *bufio.Scanner) (string, error) {
+	scanner.Scan()
+	err := scanner.Err()
+	input := scanner.Text()
+	input = strings.TrimSpace(input)
+	return input, err
 }
 
 func getInput() (string, error) {
