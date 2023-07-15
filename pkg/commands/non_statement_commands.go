@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/petarTrifunovic98/my-simple-db/pkg/ioprovider"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
 
@@ -24,7 +25,7 @@ type NonStatementExit struct {
 	NonStatementBase
 }
 
-func (ns *NonStatementExit) Execute(t *table.Table) CommandExecutionStatusCode {
+func (ns *NonStatementExit) Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode {
 	ns.code = SUCCESS
 	t.DestroyTable()
 	os.Exit(0)
@@ -50,7 +51,7 @@ type NonStatementPrint struct {
 	NonStatementBase
 }
 
-func (ns *NonStatementPrint) Execute(t *table.Table) CommandExecutionStatusCode {
+func (ns *NonStatementPrint) Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode {
 	t.PrintInternalStructure()
 	ns.code = SUCCESS
 	return ns.code
@@ -74,7 +75,7 @@ type NonStatementUnrecognized struct {
 	NonStatementBase
 }
 
-func (ns *NonStatementUnrecognized) Execute(t *table.Table) CommandExecutionStatusCode {
+func (ns *NonStatementUnrecognized) Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode {
 	ns.code = UNRECOGNIZED
 	return ns.code
 }

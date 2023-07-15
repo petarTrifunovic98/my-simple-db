@@ -11,6 +11,7 @@ type Row struct {
 	Email    [EMAIL_LEN]byte
 }
 
-func (r *Row) Print() {
-	fmt.Printf("ID: %d, Username: %s, Email: %s\n", r.Id, string(r.Username[:]), string(r.Email[:]))
+func (r *Row) ToString() string {
+	return fmt.Sprintf("ID: %d, Username: %s, Email: %s", r.Id, string(r.Username[:]), string(r.Email[:]))
+
 }

@@ -1,11 +1,11 @@
-package inputprovider
+package ioprovider
 
 import (
 	"net"
 	"strings"
 )
 
-type SocketInputProvider struct {
+type SocketIOProvider struct {
 	hostName   string
 	port       string
 	protocol   string
@@ -13,11 +13,11 @@ type SocketInputProvider struct {
 	connection net.Conn
 }
 
-func NewSocketInputProvider(hostName string, port string, protocol string) *SocketInputProvider {
+func NewSocketIOProvider(hostName string, port string, protocol string) *SocketIOProvider {
 	server, _ := net.Listen(protocol, hostName+":"+port)
 	connection, _ := server.Accept()
 
-	socketInputProvider := &SocketInputProvider{
+	socketInputProvider := &SocketIOProvider{
 		hostName:   hostName,
 		port:       port,
 		protocol:   protocol,
@@ -28,10 +28,15 @@ func NewSocketInputProvider(hostName string, port string, protocol string) *Sock
 	return socketInputProvider
 }
 
-func (sip *SocketInputProvider) GetInput() (string, error) {
+func (sip *SocketIOProvider) GetInput() (string, error) {
 	buffer := make([]byte, 1024)
 	mLen, err := sip.connection.Read(buffer)
 	input := string(buffer[:mLen])
 	input = strings.TrimSpace(input)
 	return input, err
+}
+
+func (sip *SocketIOProvider) Print(data string) {
+	data += "\n"
+	sip.connection.Write([]byte(data))
 }

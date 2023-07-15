@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/petarTrifunovic98/my-simple-db/pkg/ioprovider"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/row"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/serialization"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
@@ -26,7 +27,7 @@ type StatementSelect struct {
 	statementType StatementCommandType
 }
 
-func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
+func (s *StatementSelect) Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode {
 	s.code = SUCCESS
 
 	values := t.Select()
@@ -41,7 +42,8 @@ func (s *StatementSelect) Execute(t *table.Table) CommandExecutionStatusCode {
 		if err != nil {
 			break
 		}
-		r.Print()
+		forPrinting := r.ToString()
+		ip.Print(forPrinting)
 	}
 	return s.code
 }
@@ -64,7 +66,7 @@ type StatementSelectOne struct {
 	key           string
 }
 
-func (s *StatementSelectOne) Execute(t *table.Table) CommandExecutionStatusCode {
+func (s *StatementSelectOne) Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode {
 	s.code = SUCCESS
 
 	id, err := strconv.Atoi(s.key)
@@ -88,7 +90,8 @@ func (s *StatementSelectOne) Execute(t *table.Table) CommandExecutionStatusCode 
 		if err != nil {
 			break
 		}
-		r.Print()
+		forPrinting := r.ToString()
+		ip.Print(forPrinting)
 	}
 	return s.code
 }
@@ -114,7 +117,7 @@ type StatementInsert struct {
 	args          []string
 }
 
-func (s *StatementInsert) Execute(t *table.Table) CommandExecutionStatusCode {
+func (s *StatementInsert) Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode {
 	if len(s.args) != 3 {
 		s.code = FAILURE
 	} else {
@@ -161,7 +164,7 @@ type StatementUnrecognized struct {
 	statementType StatementCommandType
 }
 
-func (s *StatementUnrecognized) Execute(t *table.Table) CommandExecutionStatusCode {
+func (s *StatementUnrecognized) Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode {
 	s.code = UNRECOGNIZED
 	return s.code
 }

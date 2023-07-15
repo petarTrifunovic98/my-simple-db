@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/petarTrifunovic98/my-simple-db/pkg/ioprovider"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
 
@@ -20,6 +21,6 @@ const (
 )
 
 type Command interface {
-	Execute(t *table.Table) CommandExecutionStatusCode
+	Execute(t *table.Table, ip ioprovider.IIOProvider) CommandExecutionStatusCode
 	PrintPreExecution()
 }

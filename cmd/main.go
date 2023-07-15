@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/petarTrifunovic98/my-simple-db/pkg/commands"
-	inputprovider "github.com/petarTrifunovic98/my-simple-db/pkg/inputProvider"
+	"github.com/petarTrifunovic98/my-simple-db/pkg/ioprovider"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
 
@@ -19,14 +17,13 @@ func main() {
 	defer t.DestroyTable()
 	fmt.Println("~ Started my db... ")
 
-	inputProvider := inputprovider.NewSocketInputProvider("localhost", "9988", "tcp")
+	ioProvider := ioprovider.NewSocketIOProvider("localhost", "9988", "tcp")
+	// ioProvider := ioprovider.NewStdIOProvider()
 
 	for {
 		printPrompt()
 
-		//inputProvider := inputprovider.NewStdinInputProvider()
-
-		input, err := inputProvider.GetInput()
+		input, err := ioProvider.GetInput()
 
 		if err != nil {
 			fmt.Printf("An error occurred while reading input! %v", err)
@@ -38,11 +35,11 @@ func main() {
 		if inputType == commands.NON_STATEMENT_COMMAND {
 			nonStatement := getNonStatementCommand(input)
 			nonStatement.PrintPreExecution()
-			nonStatement.Execute(t)
+			nonStatement.Execute(t, ioProvider)
 		} else {
 			statement := getStatementCommand(input)
 			statement.PrintPreExecution()
-			switch statement.Execute(t) {
+			switch statement.Execute(t, ioProvider) {
 			case commands.SUCCESS:
 				fmt.Println("Success")
 			case commands.FAILURE:
@@ -58,23 +55,6 @@ func main() {
 
 func printPrompt() {
 	fmt.Print(prompt)
-}
-
-func getInputByScanner(scanner *bufio.Scanner) (string, error) {
-	scanner.Scan()
-	err := scanner.Err()
-	input := scanner.Text()
-	input = strings.TrimSpace(input)
-	return input, err
-}
-
-func getInput() (string, error) {
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
-	err := scanner.Err()
-	input := scanner.Text()
-	input = strings.TrimSpace(input)
-	return input, err
 }
 
 func getCommandType(input string) commands.CommandType {
