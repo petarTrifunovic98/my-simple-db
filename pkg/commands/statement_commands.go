@@ -45,6 +45,9 @@ func (s *StatementSelect) Execute(t *table.Table, ip ioprovider.IIOProvider) Com
 		forPrinting := r.ToString()
 		ip.Print(forPrinting)
 	}
+
+	ip.Print("end")
+
 	return s.code
 }
 
