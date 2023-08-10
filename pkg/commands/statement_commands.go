@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -35,6 +36,8 @@ func (s *StatementSelect) Execute(t *table.Table, ip ioprovider.IIOProvider) Com
 		return s.code
 	}
 
+	rows := make([]*row.RowDTO, 0)
+
 	b := bytes.NewBuffer(values)
 	for {
 		r := &row.Row{}
@@ -42,11 +45,15 @@ func (s *StatementSelect) Execute(t *table.Table, ip ioprovider.IIOProvider) Com
 		if err != nil {
 			break
 		}
-		forPrinting := r.ToString()
-		ip.Print(forPrinting)
+		rows = append(rows, r.ToRowDTO())
+		// forPrinting := r.ToString()
+		// ip.Print(forPrinting)
 	}
 
-	ip.Print("end")
+	jsonBytes, _ := json.Marshal(rows)
+	ip.Print(string(jsonBytes))
+
+	// ip.Print("end")
 
 	return s.code
 }
