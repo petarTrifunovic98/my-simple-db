@@ -94,15 +94,13 @@ func (s *StatementSelectOne) Execute(t *table.Table, ip ioprovider.IIOProvider) 
 	}
 
 	b := bytes.NewBuffer(value)
-	for {
-		r := &row.Row{}
-		err := serialization.Deserialize(b, r)
-		if err != nil {
-			break
-		}
-		forPrinting := r.ToString()
-		ip.Print(forPrinting)
-	}
+	var r *row.Row
+
+	r = &row.Row{}
+	err = serialization.Deserialize(b, r)
+
+	jsonBytes, _ := json.Marshal(r.ToRowDTO())
+	ip.Print(string(jsonBytes))
 	return s.code
 }
 
