@@ -13,14 +13,14 @@ type SocketIOProvider struct {
 	connection net.Conn
 }
 
-func NewSocketIOProvider(hostName string, port string, protocol string) *SocketIOProvider {
-	server, _ := net.Listen(protocol, hostName+":"+port)
+func NewSocketIOProvider(server net.Listener) *SocketIOProvider {
+	// server, _ := net.Listen(protocol, hostName+":"+port)
 	connection, _ := server.Accept()
 
 	socketInputProvider := &SocketIOProvider{
-		hostName:   hostName,
-		port:       port,
-		protocol:   protocol,
+		// hostName:   hostName,
+		// port:       port,
+		// protocol:   protocol,
 		server:     server,
 		connection: connection,
 	}

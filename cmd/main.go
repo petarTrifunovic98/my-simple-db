@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/petarTrifunovic98/my-simple-db/pkg/commands"
@@ -17,9 +18,17 @@ func main() {
 	defer t.DestroyTable()
 	fmt.Println("~ Started my db... ")
 
-	ioProvider := ioprovider.NewSocketIOProvider("localhost", "9988", "tcp")
-	// ioProvider := ioprovider.NewStdIOProvider()
+	server, _ := net.Listen("tcp", "localhost:9988")
 
+	for {
+		ioProvider := ioprovider.NewSocketIOProvider(server)
+		go proccessRequests(ioProvider, t)
+		// ioProvider := ioprovider.NewStdIOProvider()
+	}
+
+}
+
+func proccessRequests(ioProvider ioprovider.IIOProvider, t *table.Table) {
 	for {
 		printPrompt()
 
