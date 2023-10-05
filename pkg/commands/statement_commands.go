@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/petarTrifunovic98/my-simple-db/pkg/ioprovider"
-	"github.com/petarTrifunovic98/my-simple-db/pkg/row"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/serialization"
 	"github.com/petarTrifunovic98/my-simple-db/pkg/table"
 )
@@ -36,16 +35,31 @@ func (s *StatementSelect) Execute(t *table.Table, ip ioprovider.IIOProvider) Com
 		return s.code
 	}
 
-	rows := make([]*row.RowDTO, 0)
+	// rows := make([]*row.RowDTO, 0)
+	// rows := make([]*struct {
+	// 	Id       uint32
+	// 	Username string
+	// 	Email    string
+	// }, 0)
+	rows := make([]map[string]interface{}, 0)
 
 	b := bytes.NewBuffer(values)
 	for {
-		r := &row.Row{}
-		err := serialization.Deserialize(b, r)
+		// r := &row.Row{}
+		m := map[string]interface{}{}
+		// r := &struct {
+		// 	Id       uint32
+		// 	Username string
+		// 	Email    string
+		// }{}
+		// err := serialization.Deserialize(b, r)
+		err := serialization.Deserialize(b, &m)
+
 		if err != nil {
 			break
 		}
-		rows = append(rows, r.ToRowDTO())
+		// rows = append(rows, r.ToRowDTO())
+		rows = append(rows, m)
 		// forPrinting := r.ToString()
 		// ip.Print(forPrinting)
 	}
@@ -94,12 +108,15 @@ func (s *StatementSelectOne) Execute(t *table.Table, ip ioprovider.IIOProvider) 
 	}
 
 	b := bytes.NewBuffer(value)
-	var r *row.Row
+	// var r *row.Row
+	m := map[string]interface{}{}
 
-	r = &row.Row{}
-	err = serialization.Deserialize(b, r)
+	// r = &row.Row{}
+	// err = serialization.Deserialize(b, r)
+	err = serialization.Deserialize(b, &m)
 
-	jsonBytes, _ := json.Marshal(r.ToRowDTO())
+	// jsonBytes, _ := json.Marshal(r.ToRowDTO())
+	jsonBytes, _ := json.Marshal(m)
 	ip.Print(string(jsonBytes))
 	return s.code
 }
@@ -129,7 +146,14 @@ func (s *StatementInsert) Execute(t *table.Table, ip ioprovider.IIOProvider) Com
 	if len(s.args) != 3 {
 		s.code = FAILURE
 	} else {
-		newRow := &row.Row{}
+		// newRow := &row.Row{}
+		m := map[string]interface{}{}
+		newRow := &struct {
+			Id       uint32
+			Username string
+			Email    string
+		}{}
+
 		id, err := strconv.Atoi(s.args[0])
 		if err != nil {
 			s.code = FAILURE
@@ -137,14 +161,21 @@ func (s *StatementInsert) Execute(t *table.Table, ip ioprovider.IIOProvider) Com
 		}
 
 		newRow.Id = uint32(id)
-		copy(newRow.Username[:], []byte(s.args[1]))
-		copy(newRow.Email[:], []byte(s.args[2]))
+		m["Id"] = uint32(id)
+		// copy(newRow.Username[:], []byte(s.args[1]))
+		newRow.Username = s.args[1]
+		m["Username"] = s.args[1]
+		// copy(newRow.Email[:], []byte(s.args[2]))
+		newRow.Email = s.args[2]
+		m["Email"] = s.args[2]
 
-		rowBytes := serialization.Serialize(newRow)
+		// rowBytes := serialization.Serialize(newRow)
+		mBytes := serialization.Serialize(m)
 
 		keyBytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(keyBytes, newRow.Id)
-		t.Insert(keyBytes, rowBytes)
+		// t.Insert(keyBytes, rowBytes)
+		t.Insert(keyBytes, mBytes)
 
 		s.code = SUCCESS
 	}

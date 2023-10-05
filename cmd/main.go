@@ -18,12 +18,14 @@ func main() {
 	defer t.DestroyTable()
 	fmt.Println("~ Started my db... ")
 
+	// ioProvider := ioprovider.NewStdIOProvider()
+	// proccessRequests(ioProvider, t)
+
 	server, _ := net.Listen("tcp", "localhost:9988")
 
 	for {
 		ioProvider := ioprovider.NewSocketIOProvider(server)
 		go proccessRequests(ioProvider, t)
-		// ioProvider := ioprovider.NewStdIOProvider()
 	}
 
 }
